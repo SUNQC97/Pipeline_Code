@@ -1,0 +1,160 @@
+from . import remote
+import os
+from dotenv import load_dotenv
+
+dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
+load_dotenv(dotenv_path)
+
+project_path = os.getenv("project_path")
+
+class VirtuosEnv:
+    def __init__(self):
+        """
+        Initializes the Virtuos environment and creates a VirtuosZugriff object.
+
+        Sets up the Virtuos environment by creating a VirtuosZugriff object and initializes
+        the Virtuos environment. This is necessary to interact with the Virtuos environment
+        and execute the various configurations.
+
+        Attributes:
+            vz: VirtuosZugriff object
+        """
+        self.vz = remote.VirtuosZugriff()
+        print("VirtuosEnv initialized")
+
+    def connect_to_virtuos(self):
+        """
+        Asynchronously initializes the Virtuos environment and establishes a connection.
+
+        This function creates an instance of the Virtuos environment and connects to Virtuos
+        asynchronously. It returns the VirtuosZugriff object and the Virtuos environment object.
+
+        Returns:
+            tuple: A tuple containing the VirtuosZugriff object and the Virtuos environment object.
+        """
+        try:
+
+            # Establish connection to remote DLL
+            self.vz.virtuosDLL()
+            
+            # Start Virtuos
+            startVirtuosResult = self.vz.startVirtuosExe()
+            if startVirtuosResult != self.vz.V_SUCCD:
+                raise Exception("Error starting ISG-virtuos")
+            
+            # Initialize Corba server info
+            setCorbaInfoResult = self.vz.corbaInfo()
+            if setCorbaInfoResult == self.vz.V_SUCCD:
+                startConnectionResult =self.vz.startConnectionCorba()
+                if startConnectionResult == self.vz.V_SUCCD:
+                    print("Connection to Corba server established.")
+                else:
+                    raise Exception("Failed to connect to Corba server.")
+
+        
+            # Check if Virtuos is open
+            if self.vz.isOpen() == self.vz.V_DAMGD:
+                raise Exception("Virtuos or the desired project did not start.")
+                         
+            loadProjectResult = self.vz.getProject(project_path)
+            if loadProjectResult != self.vz.V_SUCCD:
+                raise Exception("Error loading ISG-virtuos project")
+            
+            # # Interpret a JavaScript file
+            # if self.vz.interpretJSFileFn("..\\assets\\Tree.js") != self.vz.V_SUCCD:
+            #     raise Exception("Error interpreting JS file")
+
+            print("Virtuos environment initialized successfully")
+            return self.vz  # Return the VirtuosZugriff object for use in the GUI
+                        
+        except Exception as e:
+            print(f"Exception occurred: {e}")
+            return None
+
+    def disconnect(self):
+        """
+        Disconnects from the Virtuos environment and unloads the DLL.
+
+        This method disconnects from the Virtuos environment and unloads the DLL. It is
+        called when the GUI is closed or when the user clicks the Disconnect button.
+
+        Exceptions that are raised during the disconnect process are caught and printed to
+        the console.
+
+        Returns:
+            None
+        """
+        try:
+            self.vz.stopVirtuosPrgm()
+            self.vz.stopConnect()
+            self.vz.unloadDLL()
+            print("Virtuos disconnected successfully")
+        except Exception as e:
+            print(f"Exception occurred during disconnect: {e}")
+
+
+
+def read_value_model(vz, parameter_path: str):
+
+    if not vz:
+        print("Virtuos not connected.")
+        return
+    Parameter_Value = vz.getParameterBlock_New(parameter_path)
+    return Parameter_Value
+
+
+def read_Value_Model_json(vz, parameter_path: str):
+    trafo_params = {}
+    axis_params = {}
+
+    # 读取 KinID
+    try:
+        kinid_path = f"{parameter_path}.[KinID]"
+        kinid_value = vz.getParameterBlock_New(kinid_path)
+        if kinid_value is not None:
+            trafo_params["trafo[0].id"] = kinid_value
+        else:
+            print(f"KinID not found at {kinid_path}")
+    except Exception as e:
+        print(f"Error reading KinID: {e}")
+
+
+        # 读取 trafo 参数
+    for i in range(9999):
+        full_path = f"{parameter_path}.[par_{i}]"
+        try:
+            Parameter_Value = vz.getParameterBlock_New(full_path)
+            if Parameter_Value is None:
+                break
+            trafo_params[f"trafo[0].param[{i}]"] = Parameter_Value
+        except Exception as e:
+            print(f"Error reading parameter {full_path}: {e}")
+            break
+
+    # 读取 Axis 参数
+    param_prefix_groups = {
+            "Axis": ["ratio", "s_min", "s_max", "s_init", "v_max", "a_max"],
+            "Ext":  ["ratio", "s_min", "s_max", "s_init", "v_max", "a_max"],
+            # 可继续添加其他组
+        }
+
+    for prefix, fields in param_prefix_groups.items():
+        for index in range(1, 99):  # 假设最多99个
+            for field in fields:
+                full_key = f"{parameter_path}.[{prefix}_{index}.{field}]"
+                try:
+                   value = vz.getParameterBlock_New(full_key)
+                   if value is not None:
+                      axis_params[f"{prefix}_{index}.{field}"] = value
+                except Exception as e:
+                    print(f"Error reading {full_key}: {e}")
+
+    return trafo_params, axis_params
+
+
+def extract_trafo_param_list(vz, parameter_path):
+    trafo_params, _ = read_Value_Model_json(vz, parameter_path)
+    names = list(trafo_params.keys())
+    values = list(trafo_params.values())
+    return names, values
+
