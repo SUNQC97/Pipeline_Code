@@ -8,8 +8,8 @@ def start_opc_client():
     dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
     load_dotenv(dotenv_path)
 
-    host = os.getenv("OPC_CLIENT_HOST", "localhost")
-    port = os.getenv("OPC_CLIENT_PORT", 4840)
+    host = os.getenv("SERVER_IP")
+    port = os.getenv("SERVER_PORT")
     url = f"opc.tcp://{host}:{port}"
 
     try:

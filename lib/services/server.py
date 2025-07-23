@@ -4,51 +4,52 @@ import os
 import json
 
 
-
-def start_opc_server_with_trafo(param_names=None, param_values=None):
+def create_opc_server():
     """
-    启动 OPC UA Server，并将 trafo 参数写入 Config 节点中的 TrafoConfigJSON。
+    Create and configure the OPC UA Server without Trafo-specific logic.
     """
     dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
     load_dotenv(dotenv_path)
 
-    host = os.getenv("OPC_SERVER_HOST", "0.0.0.0")
-    port = os.getenv("OPC_SERVER_PORT", "4840")
+    host = os.getenv("SERVER_IP")
+    port = os.getenv("SERVER_PORT")
     url = f"opc.tcp://{host}:{port}"
 
-    # 初始化 Server
     server = Server()
     server.set_endpoint(url)
     server.set_server_name("TwinCAT OPC UA Server")
     idx = server.register_namespace("http://example.org/")
 
-    # 创建 Config 节点
+    # Create Config node
     objects = server.get_objects_node()
     config_obj = objects.add_object(idx, "Config")
 
-    # 添加 TrafoConfigJSON 可写变量（如果传入了参数）
+    print(f"OPC UA Server created at {url}")
+    return server, config_obj, idx
+
+
+def add_trafo_config(config_obj, idx, param_names, param_values):
+    """
+    Add a TrafoConfigJSON variable to the Config node.
+    """
     if param_names and param_values:
         data = {
             "param_names": param_names,
             "param_values": param_values
         }
         json_str = json.dumps(data)
-
         json_node = config_obj.add_variable(
             idx, "TrafoConfigJSON", json_str, varianttype=ua.VariantType.String
         )
         json_node.set_writable()
-        print("TrafoConfigJSON 已写入 OPC UA 节点")
+        print("TrafoConfigJSON written to OPC UA node.")
 
-    # 示例变量（可选）
-    example_node = config_obj.add_variable(
-        idx, "ExampleVar", "test", varianttype=ua.VariantType.String
-    )
-    example_node.set_writable()
 
-    print(f"OPC UA Server started at {url}")
+def start_opc_server_with_trafo(param_names=None, param_values=None):
+    server, config_obj, idx = create_opc_server()
+    add_trafo_config(config_obj, idx, param_names, param_values)
     server.start()
-
+    print("OPC UA Server started.")
     return server
 
 
@@ -60,4 +61,3 @@ def stop_opc_server(server):
         print("No server instance to stop.")
 
     return server
-
