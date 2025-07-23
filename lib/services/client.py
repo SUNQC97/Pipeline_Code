@@ -1,73 +1,37 @@
-from opcua import Client ,ua
-from dotenv import load_dotenv
 import os
 import json
+from opcua import Client
 
-def start_opc_client():
-    
-    dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
-    load_dotenv(dotenv_path)
+def connect_opcua_client() -> Client:
+    OPCUA_URL = f"opc.tcp://{os.getenv('SERVER_IP')}:{os.getenv('SERVER_PORT')}"
+    client = Client(OPCUA_URL)
+    client.connect()
+    print(f"Connected to OPC UA Server at {OPCUA_URL}")
+    return client
 
-    host = os.getenv("SERVER_IP")
-    port = os.getenv("SERVER_PORT")
-    url = f"opc.tcp://{host}:{port}"
-
-    try:
-        client = Client(url)
-        client.connect()
-        print("OPC UA Client connected")
-        return client
-    except Exception as e:
-        print(f"Error connecting to OPC UA Client: {e}")
-        return None
-    
-
-def stop_opc_client(client):
+def disconnect_opcua_client(client: Client):
     if client:
         try:
             client.disconnect()
-            print("OPC UA Client disconnected")
+            print("Disconnected from OPC UA Server")
         except Exception as e:
-            print(f"Error disconnecting OPC UA Client: {e}")
-    else:
-        print("No client instance to disconnect.")
-    
-    return client
+            print(f"Error disconnecting OPC UA client: {e}")
 
-def read_and_write_variable(client, node_id, value):
-    if not client:
-        print("Client is not connected.")
-        return None
-    
-    try:
-        node = client.get_node(node_id)
-        current_value = node.get_value()
-        print(f"Current value of {node_id}: {current_value}")
-        
-        # Write new value
-        node.set_value(ua.Variant(value, ua.VariantType.String))
-        print(f"New value set for {node_id}: {value}")
-        
-        return current_value
-    except Exception as e:
-        print(f"Error reading or writing variable: {e}")
-        return None
-    
-
-def fetch_trafo_lines_from_client(client, node_path=["0:Objects", "2:Config", "2:TrafoConfigJSON"]):
+def fetch_trafo_json(client: Client) -> dict:
     try:
         root = client.get_root_node()
-        json_node = root.get_child(node_path)
+        json_node = root.get_child(["0:Objects", "2:Config", "2:TrafoConfigJSON"])
         json_str = json_node.get_value()
-
-        data = json.loads(json_str)
-        param_names = data["param_names"]
-        param_values = data["param_values"]
-
-        return [
-            f"{name}{' ' * (50 - len(name))}{value}"
-            for name, value in zip(param_names, param_values)
-        ]
+        return json.loads(json_str)
     except Exception as e:
-        print(f"OPC UA read error: {e}")
-        return []
+        print(f"Failed to fetch TrafoConfigJSON: {e}")
+        return {}
+
+def convert_trafo_lines(param_names: list, param_values: list) -> list:
+    lines = []
+    for name, value in zip(param_names, param_values):
+        spaces = " " * max(0, 50 - len(name))
+        lines.append(f"{name}{spaces}{value}")
+    return lines
+
+

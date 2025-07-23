@@ -5,6 +5,9 @@ import pythoncom
 import win32com.client as com
 from dotenv import load_dotenv
 import xml.etree.ElementTree as ET
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+from lib.utils.xml_trafo import clean_and_insert_trafo_lines, update_node_with_xml
 
 def load_config():
     dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
@@ -139,3 +142,17 @@ def add_child_node(sysman, parent_path, new_name, subtype):
         return False
 
     return True 
+def write_trafo_lines_to_twincat(sysman, node_path: str, trafo_lines: list):
+    if not sysman:
+        print("TwinCAT sysman is not initialized.")
+        return False
+    try:
+        node = sysman.LookupTreeItem(node_path)
+        xml_data = node.ProduceXml(True)
+        modified_xml = clean_and_insert_trafo_lines(xml_data, trafo_lines)
+        update_node_with_xml(node, modified_xml)
+        print("TwinCAT node updated successfully.")
+        return True
+    except Exception as e:
+        print(f"Error during TwinCAT update: {e}")
+        return False

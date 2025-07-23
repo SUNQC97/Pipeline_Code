@@ -1,6 +1,5 @@
 import os
 import xml.etree.ElementTree as ET
-from lib.services.TwinCAT_interface import export_cnc_node
 
 def clean_and_insert_trafo_lines(xml_data, new_trafo_lines):
     if not xml_data:
@@ -23,8 +22,3 @@ def clean_and_insert_trafo_lines(xml_data, new_trafo_lines):
 def update_node_with_xml(node, xml_str):
     node.ConsumeXml(xml_str)
     print("XML updated successfully.")
-
-def export_node_to_file(sysman, node_path, export_dir):
-    export_path = os.path.join(export_dir, "modified_cnc_node.xml")
-    export_cnc_node(sysman, node_path, export_path)
-    print(f"Exported modified CNC node to {export_path}")
