@@ -61,3 +61,16 @@ def stop_opc_server(server):
         print("No server instance to stop.")
 
     return server
+
+def update_trafo_config(server_instance, param_names, param_values):
+    config_obj = server_instance.get_objects_node().get_child(["2:Config"])
+    json_node = config_obj.get_child("2:TrafoConfigJSON")
+
+    data = {
+        "param_names": param_names,
+        "param_values": param_values
+    }
+
+    json_str = json.dumps(data)
+    json_node.set_value(json_str)
+    print("[OK] OPC UA value updated.")
