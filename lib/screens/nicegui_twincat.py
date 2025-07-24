@@ -14,13 +14,16 @@ from lib.services.TwinCAT_interface import (
     get_export_path,
     get_import_path,
     add_child_node,
-    write_trafo_lines_to_twincat
+    write_trafo_lines_to_twincat,
+    write_axis_param_to_twincat
 )
 from lib.services.client import (
     connect_opcua_client,
     disconnect_opcua_client,
     convert_trafo_lines,
-    fetch_trafo_json
+    fetch_trafo_json,
+    fetch_axis_json,
+    convert_axis_lines
 )
 
 def show_twincat_page():
@@ -278,8 +281,24 @@ def show_twincat_page():
                 return
             try:
                 data = fetch_trafo_json(opc_client)
-                lines = convert_trafo_lines(data.get("param_names", []), data.get("param_values", []))
-                write_trafo_lines_to_twincat(state.sysman, cnc_path.value, lines)
+                trafo_lines = convert_trafo_lines(data.get("param_names", []), data.get("param_values", []))
+                write_trafo_lines_to_twincat(state.sysman, cnc_path.value, trafo_lines)
+                append_log("Trafo parameters applied to TwinCAT.")
+            except Exception as e:
+                append_log(f"[Error] {e}")
+                append_log("Failed to apply trafo to TwinCAT node.")
+
+        def apply_axis_to_twincat():
+            if not state.sysman:
+                append_log("Please initialize the TwinCAT project first.")
+                return
+            if not opc_client:
+                append_log("Please connect to OPC UA Client first.")
+                return
+            try:
+                data = fetch_axis_json(opc_client)
+                aixs_lines = convert_trafo_lines(data.get("param_names", []), data.get("param_values", []))
+                write_axis_param_to_twincat(state.sysman, cnc_path.value, aixs_lines)
                 append_log("Trafo parameters applied to TwinCAT.")
             except Exception as e:
                 append_log(f"[Error] {e}")
@@ -289,6 +308,7 @@ def show_twincat_page():
         ui.button("Connect OPC UA Client", on_click=connect_client, color='green')
         ui.button("Disconnect OPC UA Client", on_click=disconnect_client, color='red')
         ui.button("Read Trafo Parameters", on_click=apply_trafo_to_twincat, color='blue')
+        ui.button("Read Axis Parameters", on_click=apply_axis_to_twincat, color='blue')
         trafo_display
 
 if __name__ == '__main__':

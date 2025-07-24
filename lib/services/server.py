@@ -45,9 +45,29 @@ def add_trafo_config(config_obj, idx, param_names, param_values):
         print("TrafoConfigJSON written to OPC UA node.")
 
 
-def start_opc_server_with_trafo(param_names=None, param_values=None):
+def add_axis_config(config_obj, idx, param_names, param_values):
+    """
+    Add an AxisConfigJSON variable to the Config node using param_names + param_values.
+    """
+    if param_names and param_values:
+        data = {
+            "param_names": param_names,
+            "param_values": param_values
+        }
+        json_str = json.dumps(data)
+        json_node = config_obj.add_variable(
+            idx, "AxisConfigJSON", json_str, varianttype=ua.VariantType.String
+        )
+        json_node.set_writable()
+        print("AxisConfigJSON written to OPC UA node.")
+
+
+def start_opc_server_with_trafo_and_axis(trafo_names=None, trafo_values=None, axis_names=None, axis_values=None):
     server, config_obj, idx = create_opc_server()
-    add_trafo_config(config_obj, idx, param_names, param_values)
+    if trafo_names and trafo_values:
+        add_trafo_config(config_obj, idx, trafo_names, trafo_values)
+    if axis_names and axis_values:
+        add_axis_config(config_obj, idx, axis_names, axis_values)
     server.start()
     print("OPC UA Server started.")
     return server
@@ -62,6 +82,7 @@ def stop_opc_server(server):
 
     return server
 
+
 def update_trafo_config(server_instance, param_names, param_values):
     config_obj = server_instance.get_objects_node().get_child(["2:Config"])
     json_node = config_obj.get_child("2:TrafoConfigJSON")
@@ -73,4 +94,19 @@ def update_trafo_config(server_instance, param_names, param_values):
 
     json_str = json.dumps(data)
     json_node.set_value(json_str)
-    print("[OK] OPC UA value updated.")
+    print("[OK] TrafoConfigJSON updated.")
+
+
+def update_axis_config(server_instance, param_names, param_values):
+    config_obj = server_instance.get_objects_node().get_child(["2:Config"])
+    json_node = config_obj.get_child("2:AxisConfigJSON")
+
+    data = {
+        "param_names": param_names,
+        "param_values": param_values
+    }
+
+    json_str = json.dumps(data)
+    json_node.set_value(json_str)
+    print("[OK] AxisConfigJSON updated.")
+

@@ -28,10 +28,26 @@ def fetch_trafo_json(client: Client) -> dict:
         return {}
 
 def convert_trafo_lines(param_names: list, param_values: list) -> list:
-    lines = []
+    trafo_lines = []
     for name, value in zip(param_names, param_values):
         spaces = " " * max(0, 50 - len(name))
-        lines.append(f"{name}{spaces}{value}")
-    return lines
+        trafo_lines.append(f"{name}{spaces}{value}")
+    return trafo_lines
 
 
+def fetch_axis_json(client: Client) -> dict:
+    try:
+        root = client.get_root_node()
+        json_node = root.get_child(["0:Objects", "2:Config", "2:AxisConfigJSON"])
+        json_str = json_node.get_value()
+        return json.loads(json_str)
+    except Exception as e:
+        print(f"Failed to fetch TrafoConfigJSON: {e}")
+        return {}
+    
+def convert_axis_lines(param_names: list, param_values: list) -> list:
+    axis_lines = []
+    for name, value in zip(param_names, param_values):
+        spaces = " " * max(0, 50 - len(name))
+        axis_lines.append(f"{name}{spaces}{value}")
+    return axis_lines

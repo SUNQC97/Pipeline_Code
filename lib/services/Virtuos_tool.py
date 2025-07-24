@@ -158,3 +158,7 @@ def extract_trafo_param_list(vz, parameter_path):
     values = list(trafo_params.values())
     return names, values
 
+def extract_axis_param_list(axis_params: dict):
+    param_names = list(axis_params.keys())
+    param_values = list(axis_params.values())
+    return param_names, param_values

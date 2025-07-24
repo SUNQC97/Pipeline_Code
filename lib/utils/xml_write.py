@@ -1,0 +1,91 @@
+import os
+import xml.etree.ElementTree as ET
+import re
+
+FIELD_MAPPING = {
+    "v_max": ("getriebe[0].dynamik.vb_max", lambda v: str(int(float(v) * 1000))),
+    "a_max": ("getriebe[0].dynamik.a_max", str),
+    "s_min": ("kenngr.swe_neg", lambda v: str(int(float(v) * 10000))),
+    "s_max": ("kenngr.swe_pos", lambda v: str(int(float(v) * 10000))),
+    "s_init": ("antr.abs_pos_offset", lambda v: str(int(float(v) * 10000))),
+}
+
+def clean_and_insert_trafo_lines(xml_data, new_trafo_lines):
+    if not xml_data:
+        raise ValueError("XML data is empty.")
+    root = ET.fromstring(xml_data)
+    sda_node = root.find(".//SdaMds")
+    if sda_node is None:
+        raise ValueError("SdaMds node not found in XML.")
+    lines = sda_node.text.splitlines()
+    cleaned_lines = [line for line in lines if not line.strip().startswith("trafo[")]
+    new_trafo_lines = [line.strip() for line in new_trafo_lines]
+    try:
+        end_index = cleaned_lines.index("Ende")
+    except ValueError:
+        end_index = len(cleaned_lines)
+    combined_lines = cleaned_lines[:end_index] + [""] + new_trafo_lines + [""] + cleaned_lines[end_index:]
+    sda_node.text = "\n".join(combined_lines)
+    return ET.tostring(root, encoding='unicode')
+
+def update_node_with_xml(node, xml_str):
+    node.ConsumeXml(xml_str)
+    print("XML updated successfully.")
+
+def axis_param_change(xml_data: str, axis_lines: list) -> str:
+    if not xml_data:
+        raise ValueError("Empty XML data.")
+
+    root = ET.fromstring(xml_data)
+
+    item_name_node = root.find(".//ItemName")
+    if item_name_node is None or not item_name_node.text:
+        raise ValueError("ItemName not found in XML.")
+
+    # 统一提取编号，构造为 Axis_X 形式
+    item_raw = item_name_node.text.strip()
+    match = re.search(r'(\d+)', item_raw)
+    if not match:
+        raise ValueError(f"No axis number found in ItemName: {item_raw}")
+    axis_name = f"Axis_{match.group(1)}"
+
+    # 找到 AchsMds CDATA 区块
+    mds_node = root.find(".//AchsMds")
+    if mds_node is None or not mds_node.text:
+        raise ValueError("AchsMds not found or empty.")
+    mds_text = mds_node.text
+
+    # 过滤当前轴对应的参数行
+    relevant_lines = [line for line in axis_lines if line.strip().startswith(axis_name + ".")]
+
+    for line in relevant_lines:
+        try:
+            full_key, raw_value = line.strip().rsplit(maxsplit=1)
+            _, param_key = full_key.split(".", 1)
+        except ValueError:
+            print(f"Invalid line format: {line}")
+            continue
+
+        if param_key not in FIELD_MAPPING:
+            print(f"Skipping unmapped param: {param_key}")
+            continue
+
+        physical_field, transform = FIELD_MAPPING[param_key]
+        try:
+            new_value = transform(raw_value)
+        except Exception as e:
+            print(f"Value transform failed for {param_key} with value {raw_value}: {e}")
+            continue
+
+        pattern = rf"^({re.escape(physical_field)}\s+)[^\s]+"
+        replacement = rf"\1{new_value}"
+        new_text, count = re.subn(pattern, replacement, mds_text, flags=re.MULTILINE)
+
+        if count == 0:
+            print(f"{physical_field} not found in CDATA.")
+        else:
+            mds_text = new_text
+            print(f"Updated {axis_name}.{param_key} to {new_value}")
+
+    mds_node.text = mds_text
+    return ET.tostring(root, encoding="unicode")

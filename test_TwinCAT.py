@@ -1,70 +1,53 @@
-import os
+from opcua import Server, ua
 import json
-import xml.etree.ElementTree as ET
-from opcua import Client
-from lib.services.TwinCAT_interface import (
-    init_project,
-    export_cnc_node,
-    load_config,
+import os
+from dotenv import load_dotenv
+from lib.services import remote  # 替换为你真实的模块名
+from lib.services import Virtuos_tool  # 替换路径
+from lib.services import server
 
-)
-from lib.utils.xml_trafo import (
-    clean_and_insert_trafo_lines,
-    update_node_with_xml,
-    export_node_to_file
-)
-# === Connect to OPC UA and read JSON string ===
-opcua_client = Client("opc.tcp://localhost:4840")
-opcua_client.connect()
+# === 初始化环境变量 ===
+dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
+load_dotenv(dotenv_path)
+host = os.getenv("SERVER_IP", "localhost")
+port = os.getenv("SERVER_PORT", "4840")
+project_path = os.getenv("project_path")
 
+# === 初始化 Virtuos 连接（已打开的项目） ===
+initialized = False
+vz_env = Virtuos_tool.VirtuosEnv()
+vz = vz_env.vz
 
-# 找到你在 Server 中注册的节点路径
-root = opcua_client.get_root_node()
-objects = root.get_child(["0:Objects", "2:Config"])  # 2 是你注册的 namespace
-json_node = objects.get_child("2:TrafoConfigJSON")
+vz.virtuosDLL()
+vz.corbaInfo()
+vz.startConnectionCorba()
 
-# 读取 JSON 字符串并解析
-json_str = json_node.get_value()
-opcua_client.disconnect()
+if vz.isOpen() == vz.V_SUCCD:
+    print("[OK] Connected to already open Virtuos project.")
+else:
+    status = vz.getProject(project_path)
+    if status == vz.V_SUCCD:
+        print("[OK] Project loaded and connected.")
+    else:
+        print("[ERROR] No open project and failed to load.")
+        exit(1)
 
-# 将 JSON 字符串转换为字典
-data = json.loads(json_str)
+initialized = True
 
-# 提取参数名和值
-param_names = data["param_names"]
-param_values = data["param_values"]
-
-# === 转换为 trafo[0].id 和 trafo[0].param[...] 格式 ===
-new_trafo_lines = []
-
-for name, value in zip(param_names, param_values):
-    spaces = " " * (50 - len(name))
-    new_trafo_lines.append(f"{name}{spaces}{value}")
+# === 读取 Trafo 和 Axis 参数 ===
+parameter_path = "[Block Diagram].[RobotController]"  # 替换为你实际路径
+trafo_params, axis_params = Virtuos_tool.read_Value_Model_json(vz, parameter_path)
 
 
-# === Load config ===
+server.create_opc_server()
 
-config = load_config()
-TWINCAT_PROJECT_PATH = config["TWINCAT_PROJECT_PATH"]
-AMS_NET_ID = config["AMS_NET_ID"]
-EXPORT_BASE_DIR = config["EXPORT_BASE_DIR"]
-node_path = "TICC^CNC^Kannal_Test1"
 
-# === TwinCAT 操作 ===
-print(f"Opening TwinCAT project: {TWINCAT_PROJECT_PATH}")
-sysman = init_project(TWINCAT_PROJECT_PATH, AMS_NET_ID)
-if not sysman:
-    print("无法打开 TwinCAT 工程。")
-    exit(1)
-
-node = sysman.LookupTreeItem(node_path)
-xml_data = node.ProduceXml(True)
 
 try:
-    modified_xml = clean_and_insert_trafo_lines(xml_data, new_trafo_lines)
-    update_node_with_xml(node, modified_xml)
-    export_node_to_file(sysman, node_path, EXPORT_BASE_DIR)
-except Exception as e:
-    print(f"更新过程中出错: {e}")
+    input("Press Enter to stop server...\n")
 finally:
-    sysman = None
+    server.stop()
+    vz.stopVirtuosPrgm()
+    vz.stopConnect()
+    vz.unloadDLL()
+    print("[STOPPED] Server + Virtuos closed.")
