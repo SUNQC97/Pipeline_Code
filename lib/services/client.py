@@ -51,3 +51,4 @@ def convert_axis_lines(param_names: list, param_values: list) -> list:
         spaces = " " * max(0, 50 - len(name))
         axis_lines.append(f"{name}{spaces}{value}")
     return axis_lines
+

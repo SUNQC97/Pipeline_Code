@@ -50,6 +50,8 @@ def axis_param_change(xml_data: str, axis_lines: list) -> str:
 
     axis_index = match.group(1).lstrip("0") or "0"
     axis_name = f"Axis_{axis_index}"
+    print(f"[Info] ItemName: {item_raw} -> Axis Nummber: {axis_index} -> Axis Param: {axis_name}.")
+
 
     # 找到 AchsMds CDATA 区块
     mds_node = root.find(".//AchsMds")
