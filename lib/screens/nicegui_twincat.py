@@ -252,7 +252,6 @@ def show_twincat_page():
             ui.label(f"OPC UA Server IP: {opc_host}").style("font-weight: bold")
             ui.label(f"Port: {opc_port}").style("font-weight: bold")
         opc_client = None
-        trafo_display = ui.textarea(label='Trafo Parameters').props('readonly').style('width: 100%; height: 200px')
 
         def connect_client():
             nonlocal opc_client
@@ -291,7 +290,7 @@ def show_twincat_page():
                 append_log(f"[Error] {e}")
                 append_log("Failed to apply trafo to TwinCAT node.")
 
-        def apply_axis_to_twincat():
+        def apply_all_axis_to_twincat():
             if not state.sysman:
                 append_log("Please initialize the TwinCAT project first.")
                 return
@@ -301,7 +300,6 @@ def show_twincat_page():
             
             
             try:
-             
                 data = fetch_axis_json(opc_client)
                 axis_lines = convert_trafo_lines(data.get("param_names", []), data.get("param_values", []))
 
@@ -352,8 +350,23 @@ def show_twincat_page():
                     append_log(f"Failed/skipped: {', '.join(failed_axes)}")
                 else:
                     append_log("No axis parameters were successfully applied.")
+                
+            except Exception as e:
+                append_log(f"[Error] {e}")
+                append_log("Failed to apply trafo to TwinCAT node.")
 
-
+        def apply_one_axis_to_twincat():
+            if not state.sysman:
+                append_log("Please initialize the TwinCAT project first.")
+                return
+            if not opc_client:
+                append_log("Please connect to OPC UA Client first.")
+                return
+            try:
+                data = fetch_axis_json(opc_client)
+                axis_lines = convert_trafo_lines(data.get("param_names", []), data.get("param_values", []))
+                write_axis_param_to_twincat(state.sysman, cnc_path.value, axis_lines)
+                append_log("Trafo parameters applied to TwinCAT.")
 
             except Exception as e:
                 append_log(f"[Error] {e}")
@@ -363,8 +376,8 @@ def show_twincat_page():
         ui.button("Connect OPC UA Client", on_click=connect_client, color='green')
         ui.button("Disconnect OPC UA Client", on_click=disconnect_client, color='red')
         ui.button("Write Trafo Parameters", on_click=apply_trafo_to_twincat, color='blue')
-        ui.button("Write Axis Parameters", on_click=apply_axis_to_twincat, color='blue')
-        trafo_display
+        ui.button("Write all Axis Parameters", on_click=apply_all_axis_to_twincat, color='blue')
+        ui.button("Write a Axis Parameters", on_click=apply_one_axis_to_twincat, color='blue')
 
 if __name__ == '__main__':
     show_twincat_page()
