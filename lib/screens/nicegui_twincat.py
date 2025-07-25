@@ -4,6 +4,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 import re
 from nicegui import ui
 from lib.screens import state
+import json
+from pathlib import Path
 from lib.services.TwinCAT_interface import (
     init_project,
     export_cnc_node,
@@ -62,6 +64,15 @@ def show_twincat_page():
     import_input.value = IMPORT_BASE_DIR + "\\"
 
     log = ui.textarea(label='Log').props('readonly').style('width: 100%; height: 200px')
+    
+    current_dir = Path(__file__).parent
+    # Load axis mapping from JSON file
+    mapping_path = current_dir.parent.parent / "lib" / "config" / "Kanal_Axis_mapping.json"
+
+    with open(mapping_path, "r", encoding="utf-8") as f:
+        axis_mapping = json.load(f)
+
+    available_kanals = list(axis_mapping.keys())
 
     def append_log(text: str):
         log.value += text + '\n'
@@ -248,10 +259,18 @@ def show_twincat_page():
         opc_host = os.getenv("SERVER_IP")
         opc_port = os.getenv("SERVER_PORT")
 
+
         with ui.row():
             ui.label(f"OPC UA Server IP: {opc_host}").style("font-weight: bold")
             ui.label(f"Port: {opc_port}").style("font-weight: bold")
         opc_client = None
+
+        selected_kanal = ui.select(
+            label="Select Kanal",
+            options=available_kanals,
+            value=available_kanals[0] if available_kanals else None
+        ).props("outlined").style("width: 200px")
+        
 
         def connect_client():
             nonlocal opc_client
@@ -298,53 +317,52 @@ def show_twincat_page():
                 append_log("Please connect to OPC UA Client first.")
                 return
             
-            
+            kanal = selected_kanal.value
+            if kanal not in axis_mapping:
+                append_log(f"[Error] Selected Kanal '{kanal}' not found in mapping.")
+                return        
+                    
             try:
+                
                 data = fetch_axis_json(opc_client)
                 axis_lines = convert_trafo_lines(data.get("param_names", []), data.get("param_values", []))
 
-                axis_names = set()
-                for line in axis_lines:
-                    if "." in line:
-                        prefix = line.split(".", 1)[0]
-                        axis_names.add(prefix)
+                kanal_mapping = axis_mapping[kanal]
+                axis_names = [k for k in kanal_mapping if re.match(r'^(Axis_|Achse_|Ext_)\d+', k)]
                 
                 success_axes = []
                 failed_axes = []
 
-                for axis_name in sorted(axis_names): 
-                    match = re.match(r"(?:Axis_|Achse_)(\d+)", axis_name)
-
-                    if not match:
-                        append_log(f"[Warning] Unrecognized axis format: {axis_name}")
+                for axis_name in sorted(axis_names):
+                    twincat_axis_name = kanal_mapping.get(axis_name)
+                    if not twincat_axis_name:
+                        append_log(f"[Warning] No TwinCAT mapping found for {axis_name}")
                         failed_axes.append(axis_name)
                         continue
 
-                    axis_index = match.group(1)
-
                     target_path = next(
-                        (p for p in available_paths if p.endswith(f"^Axis_{axis_index}") or p.endswith(f"^Achse_{axis_index}")),
+                        (p for p in available_paths if p.endswith(f"^{twincat_axis_name}")),
                         None
                     )
-
+                    
                     if not target_path:
-                        append_log(f"[Warning] No matching path for {axis_name} (Axis_{axis_index}/Achse_{axis_index})")
+                        append_log(f"[Warning] Path not found in available paths: {target_path}")
                         failed_axes.append(axis_name)
                         continue
 
                     single_axis_lines = [line for line in axis_lines if line.startswith(f"{axis_name}.")]
-
                     if not single_axis_lines:
                         append_log(f"[Warning] No parameters found for {axis_name}")
                         failed_axes.append(axis_name)
                         continue
 
                     write_axis_param_to_twincat(state.sysman, target_path, single_axis_lines)
-                    success_axes.append(axis_name)                    
-                    append_log(f" {axis_name} written to TwinCAT path: {target_path}")
+                    success_axes.append(axis_name)
+                    append_log(f"{axis_name} written to TwinCAT path: {target_path}")
+
 
                 if len(success_axes)>0 and len(failed_axes) == 0:
-                    append_log("All aixs parameters applied to TwinCAT")
+                    append_log("All axis parameters applied to TwinCAT")
                 elif len(success_axes) > 0:
                     append_log(f"Successfully applied: {', '.join(success_axes)}")
                     append_log(f"Failed/skipped: {', '.join(failed_axes)}")
