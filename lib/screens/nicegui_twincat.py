@@ -1,7 +1,7 @@
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-
+import re
 from nicegui import ui
 from lib.screens import state
 from lib.services.TwinCAT_interface import (
@@ -25,6 +25,8 @@ from lib.services.client import (
     fetch_axis_json,
     convert_axis_lines
 )
+
+available_paths = []
 
 def show_twincat_page():
     structure_map = {
@@ -143,12 +145,13 @@ def show_twincat_page():
         try:
             root_node = state.sysman.LookupTreeItem(keyword)
             append_log(f"Browsing structure: {selected} ({keyword})")
-            paths = collect_paths(root_node, prefix=keyword)
-            append_log(f"Found {len(paths)} nodes.")
+            global available_paths
+            available_paths = collect_paths(root_node, prefix=keyword)
+            append_log(f"Found {len(available_paths)} nodes.")
 
             path_selection_area.clear()
             with path_selection_area:
-                path_dropdown = ui.select(label="Select Node Path", options=paths).style("width: 100%")
+                path_dropdown = ui.select(label="Select Node Path", options=available_paths).style("width: 100%")
 
                 def confirm_node_path():
                     selected_path = path_dropdown.value
@@ -295,11 +298,63 @@ def show_twincat_page():
             if not opc_client:
                 append_log("Please connect to OPC UA Client first.")
                 return
+            
+            
             try:
+             
                 data = fetch_axis_json(opc_client)
-                aixs_lines = convert_trafo_lines(data.get("param_names", []), data.get("param_values", []))
-                write_axis_param_to_twincat(state.sysman, cnc_path.value, aixs_lines)
-                append_log("Trafo parameters applied to TwinCAT.")
+                axis_lines = convert_trafo_lines(data.get("param_names", []), data.get("param_values", []))
+
+                axis_names = set()
+                for line in axis_lines:
+                    if "." in line:
+                        prefix = line.split(".", 1)[0]
+                        axis_names.add(prefix)
+                
+                success_axes = []
+                failed_axes = []
+
+                for axis_name in sorted(axis_names): 
+                    match = re.match(r"(?:Axis_|Achse_)(\d+)", axis_name)
+
+                    if not match:
+                        append_log(f"[Warning] Unrecognized axis format: {axis_name}")
+                        failed_axes.append(axis_name)
+                        continue
+
+                    axis_index = match.group(1)
+
+                    target_path = next(
+                        (p for p in available_paths if p.endswith(f"^Axis_{axis_index}") or p.endswith(f"^Achse_{axis_index}")),
+                        None
+                    )
+
+                    if not target_path:
+                        append_log(f"[Warning] No matching path for {axis_name} (Axis_{axis_index}/Achse_{axis_index})")
+                        failed_axes.append(axis_name)
+                        continue
+
+                    single_axis_lines = [line for line in axis_lines if line.startswith(f"{axis_name}.")]
+
+                    if not single_axis_lines:
+                        append_log(f"[Warning] No parameters found for {axis_name}")
+                        failed_axes.append(axis_name)
+                        continue
+
+                    write_axis_param_to_twincat(state.sysman, target_path, single_axis_lines)
+                    success_axes.append(axis_name)                    
+                    append_log(f" {axis_name} written to TwinCAT path: {target_path}")
+
+                if len(success_axes)>0 and len(failed_axes) == 0:
+                    append_log("All aixs parameters applied to TwinCAT")
+                elif len(success_axes) > 0:
+                    append_log(f"Successfully applied: {', '.join(success_axes)}")
+                    append_log(f"Failed/skipped: {', '.join(failed_axes)}")
+                else:
+                    append_log("No axis parameters were successfully applied.")
+
+
+
             except Exception as e:
                 append_log(f"[Error] {e}")
                 append_log("Failed to apply trafo to TwinCAT node.")
@@ -307,8 +362,8 @@ def show_twincat_page():
 
         ui.button("Connect OPC UA Client", on_click=connect_client, color='green')
         ui.button("Disconnect OPC UA Client", on_click=disconnect_client, color='red')
-        ui.button("Read Trafo Parameters", on_click=apply_trafo_to_twincat, color='blue')
-        ui.button("Read Axis Parameters", on_click=apply_axis_to_twincat, color='blue')
+        ui.button("Write Trafo Parameters", on_click=apply_trafo_to_twincat, color='blue')
+        ui.button("Write Axis Parameters", on_click=apply_axis_to_twincat, color='blue')
         trafo_display
 
 if __name__ == '__main__':
