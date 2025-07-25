@@ -47,7 +47,9 @@ def axis_param_change(xml_data: str, axis_lines: list) -> str:
     match = re.search(r'(\d+)', item_raw)
     if not match:
         raise ValueError(f"No axis number found in ItemName: {item_raw}")
-    axis_name = f"Axis_{match.group(1)}"
+
+    axis_index = match.group(1).lstrip("0") or "0"
+    axis_name = f"Axis_{axis_index}"
 
     # 找到 AchsMds CDATA 区块
     mds_node = root.find(".//AchsMds")
@@ -78,7 +80,7 @@ def axis_param_change(xml_data: str, axis_lines: list) -> str:
             continue
 
         pattern = rf"^({re.escape(physical_field)}\s+)[^\s]+"
-        replacement = rf"\1{new_value}"
+        replacement = rf"\g<1>{new_value}"
         new_text, count = re.subn(pattern, replacement, mds_text, flags=re.MULTILINE)
 
         if count == 0:
