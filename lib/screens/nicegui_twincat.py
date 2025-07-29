@@ -6,6 +6,7 @@ from nicegui import ui
 from lib.screens import state
 import json
 from pathlib import Path
+from lib.screens.state import kanal_inputs
 from lib.services.TwinCAT_interface import (
     init_project,
     export_cnc_node,
@@ -17,7 +18,9 @@ from lib.services.TwinCAT_interface import (
     get_import_path,
     add_child_node,
     write_trafo_lines_to_twincat,
-    write_axis_param_to_twincat
+    write_axis_param_to_twincat,
+    write_all_trafo_to_twincat,
+    write_all_axis_param_to_twincat
 )
 from lib.services.client import (
     connect_opcua_client,
@@ -25,8 +28,9 @@ from lib.services.client import (
     convert_trafo_lines,
     fetch_trafo_json,
     fetch_axis_json,
-    convert_axis_lines
+    read_all_kanal_configs
 )
+
 
 available_paths = []
 
@@ -300,16 +304,60 @@ def show_twincat_page():
             if not opc_client:
                 append_log("Please connect to OPC UA Client first.")
                 return
+            kanal = selected_kanal.value
+            if not kanal:
+                append_log("Please select a Kanal.")
+                return
             try:
-                data = fetch_trafo_json(opc_client)
+                data = fetch_trafo_json(opc_client, kanal)
                 trafo_lines = convert_trafo_lines(data.get("param_names", []), data.get("param_values", []))
                 write_trafo_lines_to_twincat(state.sysman, cnc_path.value, trafo_lines)
-                append_log("Trafo parameters applied to TwinCAT.")
+                append_log(f"Trafo parameters for {kanal} applied to TwinCAT.")
             except Exception as e:
                 append_log(f"[Error] {e}")
                 append_log("Failed to apply trafo to TwinCAT node.")
 
-        def apply_all_axis_to_twincat():
+        def apply_trafo_to_all_kanals():
+            if not state.sysman:
+                append_log("Please initialize the TwinCAT project first.")
+                return
+            if not opc_client:
+                append_log("Please connect to OPC UA Client first.")
+                return
+
+            kanal_paths = [
+                path for path in available_paths
+                if path.split("^")[-1].lower().startswith("kanal") or path.split("^")[-1].lower().startswith("channel")
+            ]
+
+            if not kanal_paths:
+                append_log("[Warning] No Kanal/Channel paths found in available_paths.")
+                return
+
+            append_log(f"[Info] Found {len(kanal_paths)} Kanal/Channel nodes.")
+
+            success = []
+            failed = []
+
+            for path in kanal_paths:
+                print(f"Processing {path}")
+
+                try:
+                    all_configs = read_all_kanal_configs(opc_client, kanal_inputs)
+                    if not all_configs:
+                        append_log(f"[Warning] No configurations found for {path}. Skipping.")
+                        continue
+                    write_all_trafo_to_twincat(state.sysman, path, all_configs)
+                    
+                    success.append(path)
+                except Exception as e:
+                    append_log(f"[Error] Failed to write to {path}: {e}")
+                    failed.append(path)
+
+            append_log(f"\n[Summary] Success: {len(success)} | Failed: {len(failed)}")
+
+
+        def apply_all_axis_to_twincat_with_mapping():
             if not state.sysman:
                 append_log("Please initialize the TwinCAT project first.")
                 return
@@ -373,6 +421,58 @@ def show_twincat_page():
                 append_log(f"[Error] {e}")
                 append_log("Failed to apply trafo to TwinCAT node.")
 
+        def apply_all_axis_to_twincat_with_matching():
+            if not state.sysman:
+                append_log("Please initialize the TwinCAT project first.")
+                return
+            if not opc_client:
+                append_log("Please connect to OPC UA Client first.")
+                return
+            
+            # 获取所有 Axis/Achse 根路径
+            axis_paths_all = [
+                path for path in available_paths
+                if path.count("^") == 3 and path.split("^")[-1].lower().startswith(("axis_", "achse_", "ext_"))
+            ]
+
+
+            if not axis_paths_all:
+                append_log("[Warning] No Axis/Achse paths found in available_paths.")
+                return
+
+            append_log(f"[Info] Found {len(axis_paths_all)} Axis/Achse nodes.")
+
+            success = []
+            failed = []
+
+            # 预先读取所有 Kanal 配置一次
+            all_configs = read_all_kanal_configs(opc_client, kanal_inputs)
+            if not all_configs:
+                append_log("[Error] Failed to fetch Kanal configurations from OPC UA.")
+                return
+
+            for path in axis_paths_all:
+                print(f"Processing {path}")
+                try:
+                    result = write_all_axis_param_to_twincat(state.sysman, path, all_configs)
+                    if result:
+                        success.append(path)
+                    else:
+                        failed.append(path)
+                except Exception as e:
+                    append_log(f"[Error] Exception while writing to {path}: {e}")
+                    failed.append(path)
+
+            # 输出最终统计结果
+            append_log(f"\n[Summary] Axis write completed.")
+            append_log(f"Success: {len(success)}")
+            append_log(f"Failed: {len(failed)}")
+
+            if failed:
+                for f in failed:
+                    append_log(f"[Failed] {f}")
+        
+
         def apply_one_axis_to_twincat():
             if not state.sysman:
                 append_log("Please initialize the TwinCAT project first.")
@@ -394,8 +494,11 @@ def show_twincat_page():
         ui.button("Connect OPC UA Client", on_click=connect_client, color='green')
         ui.button("Disconnect OPC UA Client", on_click=disconnect_client, color='red')
         ui.button("Write Trafo Parameters", on_click=apply_trafo_to_twincat, color='blue')
-        ui.button("Write all Axis Parameters", on_click=apply_all_axis_to_twincat, color='blue')
+        ui.button("Write Trafo Parameters to All Kanal", on_click=apply_trafo_to_all_kanals, color='blue')
+        ui.button("Write all Axis Parameters with Mapping", on_click=apply_all_axis_to_twincat_with_mapping, color='blue')
+        ui.button("Write all Axis Parameters with Matching", on_click=apply_all_axis_to_twincat_with_matching, color='blue')
         ui.button("Write a Axis Parameters", on_click=apply_one_axis_to_twincat, color='blue')
+
 
 if __name__ == '__main__':
     show_twincat_page()

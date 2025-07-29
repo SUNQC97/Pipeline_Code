@@ -10,6 +10,8 @@ FIELD_MAPPING = {
     "s_init": ("antr.abs_pos_offset", lambda v: str(int(float(v) * 10000))),
 }
 
+
+
 def clean_and_insert_trafo_lines(xml_data, new_trafo_lines):
     if not xml_data:
         raise ValueError("XML data is empty.")
@@ -32,7 +34,7 @@ def update_node_with_xml(node, xml_str):
     node.ConsumeXml(xml_str)
     print("XML updated successfully.")
 
-def axis_param_change(xml_data: str, axis_lines: list) -> str:
+def axis_param_change_with_mapping(xml_data: str, axis_lines: list) -> str:
     if not xml_data:
         raise ValueError("Empty XML data.")
 
@@ -90,6 +92,59 @@ def axis_param_change(xml_data: str, axis_lines: list) -> str:
         else:
             mds_text = new_text
             print(f"Updated {axis_name}.{param_key} to {new_value}")
+
+    mds_node.text = mds_text
+    return ET.tostring(root, encoding="unicode")
+
+
+def axis_param_change_with_matching(xml_data: str, axis_lines: list) -> str:
+    if not xml_data:
+        raise ValueError("Empty XML data.")
+
+    root = ET.fromstring(xml_data)
+
+    item_name_node = root.find(".//ItemName")
+    if item_name_node is None or not item_name_node.text:
+        raise ValueError("ItemName not found in XML.")
+
+    item_raw = item_name_node.text.strip()
+    match = re.search(r'(\d+)', item_raw)
+    if not match:
+        raise ValueError(f"No axis number found in ItemName: {item_raw}")
+
+    axis_index = match.group(1).lstrip("0") or "0"
+    axis_name = f"Axis_{axis_index}"
+    print(f"[Info] ItemName: {item_raw} → Axis Name Used for Param Matching: {axis_name}")
+
+    mds_node = root.find(".//AchsMds")
+    if mds_node is None or not mds_node.text:
+        raise ValueError("AchsMds not found or empty.")
+    mds_text = mds_node.text
+
+    for line in axis_lines:
+        try:
+            full_key, raw_value = line.strip().rsplit(maxsplit=1)
+            _, param_key = full_key.split(".", 1)
+        except ValueError:
+            print(f"[Warning] Invalid line format: {line}")
+            continue
+
+        physical_field, transform = FIELD_MAPPING[param_key]
+        try:
+            new_value = transform(raw_value)
+        except Exception as e:
+            print(f"[Error] Failed to transform {param_key} = {raw_value}: {e}")
+            continue
+
+        pattern = rf"^({re.escape(physical_field)}\s+)[^\s]+"
+        replacement = rf"\g<1>{new_value}"
+        new_text, count = re.subn(pattern, replacement, mds_text, flags=re.MULTILINE)
+
+        if count == 0:
+            print(f"[Not Found] {physical_field} not found in CDATA.")
+        else:
+            mds_text = new_text
+            print(f"[Updated] {full_key} → {new_value}")
 
     mds_node.text = mds_text
     return ET.tostring(root, encoding="unicode")

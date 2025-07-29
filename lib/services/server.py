@@ -3,10 +3,9 @@ from dotenv import load_dotenv
 import os
 import json
 
-
-def create_opc_server():
+def create_opc_server(kanal_names):
     """
-    Create and configure the OPC UA Server without Trafo-specific logic.
+    Create and configure OPC UA server with multiple Kanal/Channel nodes.
     """
     dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
     load_dotenv(dotenv_path)
@@ -20,58 +19,50 @@ def create_opc_server():
     server.set_server_name("TwinCAT OPC UA Server")
     idx = server.register_namespace("http://example.org/")
 
-    # Create Config node
     objects = server.get_objects_node()
-    config_obj = objects.add_object(idx, "Config")
+    kanal_nodes = {}
 
-    print(f"OPC UA Server created at {url}")
-    return server, config_obj, idx
+    for kanal in kanal_names:
+        kanal_node = objects.add_object(idx, kanal)
+        kanal_nodes[kanal] = kanal_node
 
+    print(f"[OK] OPC UA Server created at {url}")
+    return server, kanal_nodes, idx
 
-def add_trafo_config(config_obj, idx, param_names, param_values):
+def add_kanal_config(kanal_node, idx, trafo_names, trafo_values, axis_names, axis_values):
     """
-    Add a TrafoConfigJSON variable to the Config node.
+    Add Trafo and Axis config variables to a specific Kanal/Channel node.
     """
-    if param_names and param_values:
-        data = {
-            "param_names": param_names,
-            "param_values": param_values
-        }
-        json_str = json.dumps(data)
-        json_node = config_obj.add_variable(
-            idx, "TrafoConfigJSON", json_str, varianttype=ua.VariantType.String
-        )
-        json_node.set_writable()
-        print("TrafoConfigJSON written to OPC UA node.")
-
-
-def add_axis_config(config_obj, idx, param_names, param_values):
-    """
-    Add an AxisConfigJSON variable to the Config node using param_names + param_values.
-    """
-    if param_names and param_values:
-        data = {
-            "param_names": param_names,
-            "param_values": param_values
-        }
-        json_str = json.dumps(data)
-        json_node = config_obj.add_variable(
-            idx, "AxisConfigJSON", json_str, varianttype=ua.VariantType.String
-        )
-        json_node.set_writable()
-        print("AxisConfigJSON written to OPC UA node.")
-
-
-def start_opc_server_with_trafo_and_axis(trafo_names=None, trafo_values=None, axis_names=None, axis_values=None):
-    server, config_obj, idx = create_opc_server()
     if trafo_names and trafo_values:
-        add_trafo_config(config_obj, idx, trafo_names, trafo_values)
+        trafo_data = json.dumps({"param_names": trafo_names, "param_values": trafo_values})
+        trafo_var = kanal_node.add_variable(idx, "TrafoConfigJSON", trafo_data, ua.VariantType.String)
+        trafo_var.set_writable()
     if axis_names and axis_values:
-        add_axis_config(config_obj, idx, axis_names, axis_values)
-    server.start()
-    print("OPC UA Server started.")
-    return server
+        axis_data = json.dumps({"param_names": axis_names, "param_values": axis_values})
+        axis_var = kanal_node.add_variable(idx, "AxisConfigJSON", axis_data, ua.VariantType.String)
+        axis_var.set_writable()
 
+def start_opc_server_multi_kanal(kanal_data_dict):
+    """
+    Start the OPC UA server and configure multiple Kanal nodes with their configs.
+    """
+    kanal_names = list(kanal_data_dict.keys())
+    server, kanal_nodes, idx = create_opc_server(kanal_names)
+
+    for kanal, node in kanal_nodes.items():
+        data = kanal_data_dict[kanal]
+        add_kanal_config(
+            kanal_node=node,
+            idx=idx,
+            trafo_names=data.get("trafo_names"),
+            trafo_values=data.get("trafo_values"),
+            axis_names=data.get("axis_names"),
+            axis_values=data.get("axis_values"),
+        )
+
+    server.start()
+    print("\n OPC UA Server started with multiple Kanals.")
+    return server
 
 def stop_opc_server(server):
     if server:
@@ -79,27 +70,14 @@ def stop_opc_server(server):
         print("OPC UA Server stopped.")
     else:
         print("No server instance to stop.")
-
     return server
 
-
-def update_trafo_config(server_instance, param_names, param_values):
-    config_obj = server_instance.get_objects_node().get_child(["2:Config"])
-    json_node = config_obj.get_child("2:TrafoConfigJSON")
-
-    data = {
-        "param_names": param_names,
-        "param_values": param_values
-    }
-
-    json_str = json.dumps(data)
-    json_node.set_value(json_str)
-    print("[OK] TrafoConfigJSON updated.")
-
-
-def update_axis_config(server_instance, param_names, param_values):
-    config_obj = server_instance.get_objects_node().get_child(["2:Config"])
-    json_node = config_obj.get_child("2:AxisConfigJSON")
+def update_kanal_axis_config(server_instance, kanal_name, param_type, param_names, param_values):
+    """
+    Update the JSON data for a given Kanal and config type ("TrafoConfigJSON" or "AxisConfigJSON").
+    """
+    config_obj = server_instance.get_objects_node().get_child([f"2:{kanal_name}"])
+    json_node = config_obj.get_child(f"2:{param_type}")
 
     data = {
         "param_names": param_names,
@@ -108,5 +86,18 @@ def update_axis_config(server_instance, param_names, param_values):
 
     json_str = json.dumps(data)
     json_node.set_value(json_str)
-    print("[OK] AxisConfigJSON updated.")
+    print(f"[OK] {param_type} for {kanal_name} updated.")
 
+def update_axis_config(server_instance, kanal_name, axis_names, axis_values):
+    """
+    Specifically update AxisConfigJSON for a given Kanal.
+    """
+    update_kanal_axis_config(server_instance, kanal_name, "AxisConfigJSON", axis_names, axis_values)
+    print(f"[OK] AxisConfigJSON for {kanal_name} updated.")
+
+def update_trafo_config(server_instance, kanal_name, trafo_names, trafo_values):
+    """
+    Specifically update TrafoConfigJSON for a given Kanal.
+    """
+    update_kanal_axis_config(server_instance, kanal_name, "TrafoConfigJSON", trafo_names, trafo_values)
+    print(f"[OK] TrafoConfigJSON for {kanal_name} updated.")
