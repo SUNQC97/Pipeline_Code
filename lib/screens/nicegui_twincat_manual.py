@@ -20,7 +20,8 @@ from lib.services.TwinCAT_interface import (
     write_trafo_lines_to_twincat,
     write_axis_param_to_twincat,
     write_all_trafo_to_twincat,
-    write_all_axis_param_to_twincat
+    write_all_axis_param_to_twincat,
+    read_all_trafo_from_twincat
 )
 from lib.services.client import (
     connect_opcua_client,
@@ -35,6 +36,7 @@ from lib.services.client import (
 available_paths = []
 
 def show_twincat_page():
+  
     structure_map = {
         "I/O Configuration": "TIIC",
         "I/O Devices": "TIID",
@@ -357,6 +359,57 @@ def show_twincat_page():
             append_log(f"\n[Summary] Success: {len(success)} | Failed: {len(failed)}")
 
 
+        def read_trafo_from_all_kanals():
+            if not state.sysman:
+                append_log("Please initialize the TwinCAT project first.")
+                return
+            if not opc_client:
+                append_log("Please connect to OPC UA Client first.")
+                return
+
+            kanal_paths = [
+                path for path in available_paths
+                if path.split("^")[-1].lower().startswith("kanal") or path.split("^")[-1].lower().startswith("channel")
+            ]
+
+            if not kanal_paths:
+                append_log("[Warning] No Kanal/Channel paths found in available_paths.")
+                return
+
+            append_log(f"[Info] Found {len(kanal_paths)} Kanal/Channel nodes.")
+
+            try:
+                all_configs = read_all_kanal_configs(opc_client, kanal_inputs)
+                if not all_configs:
+                    append_log("[Warning] No configurations found from OPC UA.")
+                    return
+            except Exception as e:
+                append_log(f"[Error] Failed to fetch OPC UA config: {e}")
+                return
+            
+            ##debug output
+            print(f"Read all Kanal configs before processing: {all_configs}")
+
+            success = []
+            failed = []
+
+            for path in kanal_paths:
+                try:
+                    result = read_all_trafo_from_twincat(state.sysman, path, all_configs)
+                    if result:
+                        success.append(path)
+                    else:
+                        failed.append(path)
+                except Exception as e:
+                    append_log(f"[Error] Failed to read from {path}: {e}")
+                    failed.append(path)
+
+            append_log(f"\n[Summary] Success: {len(success)} | Failed: {len(failed)}")
+
+            ##debug output
+            print(f"Read Trafo from all Kanal:{all_configs}")
+
+
         def apply_all_axis_to_twincat_with_mapping():
             if not state.sysman:
                 append_log("Please initialize the TwinCAT project first.")
@@ -498,8 +551,38 @@ def show_twincat_page():
         ui.button("Write all Axis Parameters with Mapping", on_click=apply_all_axis_to_twincat_with_mapping, color='blue')
         ui.button("Write all Axis Parameters with Matching", on_click=apply_all_axis_to_twincat_with_matching, color='blue')
         ui.button("Write a Axis Parameters", on_click=apply_one_axis_to_twincat, color='blue')
+        ui.button("Read Trafo Parameters from All Kanal", on_click=read_trafo_from_all_kanals, color='blue')
 
+    def one_click_full_apply():
+        append_log("=== [Start] One-click CNC Init + Write ===")
 
-if __name__ == '__main__':
-    show_twincat_page()
-    ui.run()
+        try:
+            init_sysman()
+            connect_client()
+
+            # CNC结构遍历（确保 available_paths 被更新）
+            append_log("Browsing CNC structure...")
+            # 这里自动选择结构并遍历，比如默认用 "CNC Configuration"
+            structure_key = "CNC Configuration"
+            keyword = structure_map[structure_key]
+            root_node = state.sysman.LookupTreeItem(keyword)
+            global available_paths
+            available_paths = collect_paths(root_node, prefix=keyword)
+            append_log(f"Found {len(available_paths)} nodes.")
+
+            if not available_paths:
+                append_log("[Abort] Failed to browse CNC structure.")
+                return
+
+            append_log("Writing Trafo to all Kanal paths...")
+            apply_trafo_to_all_kanals()
+
+            append_log("Writing Axis with automatic matching...")
+            apply_all_axis_to_twincat_with_matching()
+
+            append_log("=== [Done] All parameters applied ===")
+        except Exception as e:
+            append_log(f"[Error] {e}")
+
+    ui.button("One-click CNC Init + Write", on_click=one_click_full_apply, color='primary').props('raised')
+                

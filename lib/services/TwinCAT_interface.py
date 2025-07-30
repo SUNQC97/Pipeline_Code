@@ -7,7 +7,13 @@ from dotenv import load_dotenv
 import xml.etree.ElementTree as ET
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-from lib.utils.xml_write import clean_and_insert_trafo_lines, update_node_with_xml, axis_param_change_with_mapping, axis_param_change_with_matching
+from lib.utils.xml_read_write import (
+    update_node_with_xml,
+    axis_param_change_with_mapping, 
+    axis_param_change_with_matching,
+    read_trafo_lines_from_xml,
+    clean_and_insert_trafo_lines
+)
 from lib.services.client import convert_trafo_lines, convert_axis_lines, fetch_axis_json, fetch_trafo_json, read_all_kanal_configs
 
 
@@ -143,7 +149,6 @@ def add_child_node(sysman, parent_path, new_name, subtype):
         print(f"Failed to add child node: {e}")
         return False
        
-
 def write_trafo_lines_to_twincat(sysman, node_path: str, trafo_lines: list):
     if not sysman:
         print("TwinCAT sysman is not initialized.")
@@ -196,11 +201,46 @@ def write_all_trafo_to_twincat(sysman, node_path: str, all_configs: list):
         # Clean and insert the new trafo lines into the XML
         modified_xml = clean_and_insert_trafo_lines(xml_data, trafo_lines)
         update_node_with_xml(node, modified_xml)
+
         print(f"TwinCAT node Kanal {kanal_name} updated successfully.")
 
     except Exception as e:
         print(f"Error during TwinCAT update: {e}")
         return False
+
+def read_all_trafo_from_twincat(sysman, node_path: str, all_configs: dict) -> dict | None:
+    if not sysman:
+        print("TwinCAT sysman is not initialized.")
+        return None
+    try:
+        node = sysman.LookupTreeItem(node_path)
+        xml_data = node.ProduceXml(True)
+
+        root = ET.fromstring(xml_data)
+        item_type = root.findtext("ItemType")
+        item_id = root.findtext("ItemId")
+
+        print(f"Parsed ItemType = {item_type}, ItemId = {item_id}")
+        if item_type != "401":
+            print(f"Node {node_path} is not a valid Kanal node.")
+            return None
+
+        kanal_name = f"Kanal_{int(item_id)}"
+        param_names, param_values = read_trafo_lines_from_xml(xml_data)
+
+        all_configs[kanal_name] = {
+            "trafo": {
+                "param_names": param_names,
+                "param_values": param_values
+            }
+        }
+
+        print(f"[OK] TwinCAT node {kanal_name} read and updated into all_configs.")
+        return all_configs
+
+    except Exception as e:
+        print(f"[Error] Failed to read TwinCAT node: {e}")
+        return None
 
 
 def write_axis_param_to_twincat(sysman, node_path: str, axis_lines: list):
@@ -285,9 +325,6 @@ def write_all_axis_param_to_twincat(sysman, node_path: str, all_configs: list):
         print(f"Error during TwinCAT update: {e}")
         return False
 
-
-
-
 def scale_trafo_values(param_names: list, param_values: list, factor: int = 10000) -> list:
     """
     对所有 param[...] 项进行缩放，id 保持原值。
@@ -303,3 +340,5 @@ def scale_trafo_values(param_names: list, param_values: list, factor: int = 1000
             scaled = str(value)  # fallback fallback fallback
         scaled_values.append(scaled)
     return scaled_values
+
+    

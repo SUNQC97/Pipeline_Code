@@ -30,6 +30,32 @@ def clean_and_insert_trafo_lines(xml_data, new_trafo_lines):
     sda_node.text = "\n".join(combined_lines)
     return ET.tostring(root, encoding='unicode')
 
+def read_trafo_lines_from_xml(xml_data):
+    if not xml_data:
+        raise ValueError("XML data is empty.")
+
+    root = ET.fromstring(xml_data)
+    sda_node = root.find(".//SdaMds")
+    if sda_node is None or not sda_node.text:
+        raise ValueError("SdaMds node not found or empty in XML.")
+
+    cdata = sda_node.text
+
+    # 提取 ID
+    match_id = re.search(r"trafo\[0\]\.id\s+(-?\d+)", cdata)
+    trafo_id = match_id.group(1) if match_id else "0"
+
+    # 提取所有参数
+    param_matches = re.findall(r"trafo\[0\]\.param\[(\d+)]\s+(-?\d+)", cdata)
+    param_matches.sort(key=lambda x: int(x[0]))
+
+    param_names = ["trafo[0].id"] + [f"trafo[0].param[{i}]" for i, _ in param_matches]
+    param_values = [trafo_id] + [v for _, v in param_matches]
+
+    return param_names, param_values
+
+
+
 def update_node_with_xml(node, xml_str):
     node.ConsumeXml(xml_str)
     print("XML updated successfully.")
