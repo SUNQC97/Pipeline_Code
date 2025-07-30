@@ -21,7 +21,8 @@ from lib.services.TwinCAT_interface import (
     write_axis_param_to_twincat,
     write_all_trafo_to_twincat,
     write_all_axis_param_to_twincat,
-    read_all_trafo_from_twincat
+    read_all_trafo_from_twincat,
+    read_all_axis_from_twincat,
 )
 from lib.services.client import (
     connect_opcua_client,
@@ -29,7 +30,8 @@ from lib.services.client import (
     convert_trafo_lines,
     fetch_trafo_json,
     fetch_axis_json,
-    read_all_kanal_configs
+    read_all_kanal_configs,
+    write_all_configs_to_opcua
 )
 
 
@@ -359,13 +361,13 @@ def show_twincat_page():
             append_log(f"\n[Summary] Success: {len(success)} | Failed: {len(failed)}")
 
 
-        def read_trafo_from_all_kanals():
+        def read_trafo_from_all_kanals(all_configs):
             if not state.sysman:
                 append_log("Please initialize the TwinCAT project first.")
-                return
+                return all_configs
             if not opc_client:
                 append_log("Please connect to OPC UA Client first.")
-                return
+                return all_configs
 
             kanal_paths = [
                 path for path in available_paths
@@ -374,29 +376,22 @@ def show_twincat_page():
 
             if not kanal_paths:
                 append_log("[Warning] No Kanal/Channel paths found in available_paths.")
-                return
+                return all_configs
 
             append_log(f"[Info] Found {len(kanal_paths)} Kanal/Channel nodes.")
 
-            try:
-                all_configs = read_all_kanal_configs(opc_client, kanal_inputs)
-                if not all_configs:
-                    append_log("[Warning] No configurations found from OPC UA.")
-                    return
-            except Exception as e:
-                append_log(f"[Error] Failed to fetch OPC UA config: {e}")
-                return
-            
-            ##debug output
-            print(f"Read all Kanal configs before processing: {all_configs}")
+            if not all_configs:
+                append_log("[Warning] Input all_configs is empty. Abort.")
+                return all_configs
 
             success = []
             failed = []
 
             for path in kanal_paths:
                 try:
-                    result = read_all_trafo_from_twincat(state.sysman, path, all_configs)
-                    if result:
+                    updated = read_all_trafo_from_twincat(state.sysman, path, all_configs)
+                    if updated:
+                        all_configs = updated 
                         success.append(path)
                     else:
                         failed.append(path)
@@ -405,10 +400,10 @@ def show_twincat_page():
                     failed.append(path)
 
             append_log(f"\n[Summary] Success: {len(success)} | Failed: {len(failed)}")
+            write_all_configs_to_opcua(opc_client, all_configs)  
+            append_log("All Kanal configurations updated in OPC UA Server.")
 
-            ##debug output
-            print(f"Read Trafo from all Kanal:{all_configs}")
-
+               
 
         def apply_all_axis_to_twincat_with_mapping():
             if not state.sysman:
@@ -525,6 +520,52 @@ def show_twincat_page():
                 for f in failed:
                     append_log(f"[Failed] {f}")
         
+        def read_all_axis_from_twincat_with_matching(all_configs):
+            if not state.sysman:
+                append_log("TwinCAT is not initialized. Please initialize it first.")
+                return all_configs
+
+            if not opc_client:
+                append_log("OPC UA client is not connected. Please connect first.")
+                return all_configs
+
+            axis_paths_all = [
+                path for path in available_paths
+                if path.count("^") == 3 and path.split("^")[-1].lower().startswith(("axis_", "achse_", "ext_"))
+            ]
+
+            if not axis_paths_all:
+                append_log("[Warning] No Axis/Achse paths found.")
+                return all_configs
+
+            append_log(f"[Info] Found {len(axis_paths_all)} Axis/Achse nodes.")
+
+            success = []
+            failed = []
+
+            for path in axis_paths_all:
+                print(f"Processing {path}")
+                try:
+                    updated_config = read_all_axis_from_twincat(state.sysman, path, all_configs)
+                    if updated_config:
+                        all_configs = updated_config 
+                        success.append(path)
+                    else:
+                        append_log(f"[Failed] Could not read from: {path}")
+                        failed.append(path)
+                except Exception as e:
+                    append_log(f"[Error] Exception while reading from {path}: {e}")
+                    failed.append(path)
+
+            append_log("\n[Summary] Axis parameter reading completed.")
+            append_log(f"Successful: {len(success)}")
+            append_log(f"Failed: {len(failed)}")
+            if failed:
+                for f in failed:
+                    append_log(f"[Failed] {f}")
+
+            write_all_configs_to_opcua(opc_client, all_configs) 
+            append_log("All axis configurations updated in OPC UA Server.")     
 
         def apply_one_axis_to_twincat():
             if not state.sysman:
@@ -552,6 +593,7 @@ def show_twincat_page():
         ui.button("Write all Axis Parameters with Matching", on_click=apply_all_axis_to_twincat_with_matching, color='blue')
         ui.button("Write a Axis Parameters", on_click=apply_one_axis_to_twincat, color='blue')
         ui.button("Read Trafo Parameters from All Kanal", on_click=read_trafo_from_all_kanals, color='blue')
+        ui.button("Read Axis Parameters from All Kanal", on_click=read_all_axis_from_twincat_with_matching, color='blue')
 
     def one_click_full_apply():
         append_log("=== [Start] One-click CNC Init + Write ===")
@@ -584,5 +626,35 @@ def show_twincat_page():
         except Exception as e:
             append_log(f"[Error] {e}")
 
+    def one_click_full_read():
+        append_log("=== [Start] One-click Read ===")
+
+        try:
+            if not state.sysman:
+                append_log("Please initialize the TwinCAT project first.")
+                return
+
+            if not opc_client:
+                connect_client()
+            if not opc_client:
+                append_log("Failed to connect to OPC UA Client.")
+                return
+
+            append_log("Step 1: Fetching base configs from OPC UA...")
+
+
+            append_log("Step 2: Reading Trafo from TwinCAT...")
+            read_trafo_from_all_kanals(read_all_kanal_configs(opc_client, kanal_inputs))
+
+            append_log("Step 3: Reading Axis from TwinCAT...")
+            read_all_axis_from_twincat_with_matching(read_all_kanal_configs(opc_client, kanal_inputs))
+
+
+        except Exception as e:
+            append_log(f"[Error] Exception during full read: {e}")
+
+
+
+
     ui.button("One-click CNC Init + Write", on_click=one_click_full_apply, color='primary').props('raised')
-                
+    ui.button("One-click Read", on_click=one_click_full_read, color='primary').props('raised')                

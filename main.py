@@ -19,4 +19,4 @@ with ui.tab_panels(tabs, value=twincat_tab).classes('w-full'):
     with ui.tab_panel(twincat_tab):
         show_twincat_page()
 
-ui.run()
+ui.run(title='TwinCAT and Virtuos UI', port=8080, reload=True)

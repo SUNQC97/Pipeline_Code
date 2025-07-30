@@ -52,3 +52,31 @@ def read_all_kanal_configs(client: Client, kanal_names: list[str]) -> dict:
             "axis": axis_data
         }
     return all_configs
+
+def write_all_configs_to_opcua(client: Client, all_configs: dict):
+
+    try:
+        root = client.get_root_node()
+        
+        for kanal_name, config in all_configs.items():
+            for param_type in ["trafo", "axis"]:
+                config_data = config.get(param_type)
+                if not config_data or not config_data.get("param_names"):
+                    print(f"[Skip] No valid {param_type} data in {kanal_name}")
+                    continue
+
+                try:
+                    node = root.get_child([
+                        "0:Objects",
+                        f"2:{kanal_name}",
+                        f"2:{param_type.capitalize()}ConfigJSON"
+                    ])
+                    json_str = json.dumps(config_data, indent=2)
+                    node.set_value(json_str)
+                    print(f"[OK] Updated {kanal_name} → {param_type.capitalize()}ConfigJSON")
+                except Exception as e:
+                    print(f"[Error] Failed to write {param_type} to {kanal_name}: {e}")
+
+    except Exception as e:
+        print(f"[Fatal Error] Cannot access OPC UA structure: {e}")
+

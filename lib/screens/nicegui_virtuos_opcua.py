@@ -22,7 +22,7 @@ def show_virtuos_server():
     with ui.column().style("width: 100%; max-width: 600px"):
         ui.label("Block → Kanal Mapping").style("font-weight: bold")
 
-        for kanal in ["Kanal_1", "Kanal_2"]:  # 你也可以让用户动态加
+        for kanal in ["Kanal_1"]:  # 你也可以让用户动态加
             block_input = ui.input(f"Block for {kanal}", value=f"[Block Diagram].[RobotController]").style("width: 100%")
             kanal_inputs[kanal] = block_input
 
@@ -110,12 +110,14 @@ def show_virtuos_server():
             for kanal, input_field in kanal_inputs.items():
                 path = input_field.value.strip()
 
+                # 更新 Trafo
                 trafo_names, trafo_values = Virtuos_tool.extract_trafo_param_list(vz, path)
                 server.update_trafo_config(opc_server_instance, kanal, trafo_names, trafo_values)
 
+                # 更新 Axis
                 axis_params = Virtuos_tool.read_Value_Model_json(vz, path)[1]
                 axis_names, axis_values = Virtuos_tool.extract_axis_param_list(axis_params)
-                server.update_kanal_axis_config(opc_server_instance, kanal, axis_names, axis_values)
+                server.update_kanal_axis_config(opc_server_instance, kanal, "AxisConfigJSON", axis_names, axis_values)
 
                 await append_log(f"[OK] {kanal} refreshed from block {path}")
 
@@ -124,6 +126,27 @@ def show_virtuos_server():
         except Exception as e:
             await append_log(f"[EXCEPTION] {e}")
 
+    async def write_back_all_from_opcua_server():
+        global vz, opc_server_instance
+        if not vz or not opc_server_instance:
+            await append_log("[ERROR] Virtuos or OPC UA Server not initialized.")
+            return
+
+        for kanal, input_field in kanal_inputs.items():
+            block_path = input_field.value.strip()
+            kanal_data = server.read_kanal_data_from_server_instance(opc_server_instance, kanal)
+
+            Virtuos_tool.write_params_to_virtuos(
+                vz,
+                block_path,
+                kanal_data["trafo_names"],
+                kanal_data["trafo_values"],
+                kanal_data["axis_names"],
+                kanal_data["axis_values"]
+            )
+
+            await append_log(f"[OK] {kanal} → Virtuos written from server variables.")
+
 
     ui.label("Virtuos → OPC UA Bridge").style("font-weight: bold; font-size: 20px;")
     
@@ -131,4 +154,5 @@ def show_virtuos_server():
     ui.button("Read Data and Start OPC UA Server", on_click=read_and_start_multi_kanal_server, color='green')
     ui.button("Stop OPC UA Server", on_click=stop_opc, color='red')
     ui.button("Refresh All Parameters", on_click=refresh_all_on_server, color='orange')
+    ui.button("Write Back All from OPC UA Server", on_click=write_back_all_from_opcua_server, color='purple')
     log_area

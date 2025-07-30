@@ -3,12 +3,13 @@ import xml.etree.ElementTree as ET
 import re
 
 FIELD_MAPPING = {
-    "v_max": ("getriebe[0].dynamik.vb_max", lambda v: str(int(float(v) * 1000))),
-    "a_max": ("getriebe[0].dynamik.a_max", str),
-    "s_min": ("kenngr.swe_neg", lambda v: str(int(float(v) * 10000))),
-    "s_max": ("kenngr.swe_pos", lambda v: str(int(float(v) * 10000))),
-    "s_init": ("antr.abs_pos_offset", lambda v: str(int(float(v) * 10000))),
+    "v_max": ("getriebe[0].dynamik.vb_max", lambda v: str(int(float(v) * 1000)), lambda v: str(float(v) / 1000)),
+    "a_max": ("getriebe[0].dynamik.a_max", str, str),
+    "s_min": ("kenngr.swe_neg", lambda v: str(int(float(v) * 10000)), lambda v: str(float(v) / 10000)),
+    "s_max": ("kenngr.swe_pos", lambda v: str(int(float(v) * 10000)), lambda v: str(float(v) / 10000)),
+    "s_init": ("antr.abs_pos_offset", lambda v: str(int(float(v) * 10000)), lambda v: str(float(v) / 10000)),
 }
+
 
 
 
@@ -53,8 +54,6 @@ def read_trafo_lines_from_xml(xml_data):
     param_values = [trafo_id] + [v for _, v in param_matches]
 
     return param_names, param_values
-
-
 
 def update_node_with_xml(node, xml_str):
     node.ConsumeXml(xml_str)
@@ -102,7 +101,8 @@ def axis_param_change_with_mapping(xml_data: str, axis_lines: list) -> str:
             print(f"Skipping unmapped param: {param_key}")
             continue
 
-        physical_field, transform = FIELD_MAPPING[param_key]
+        physical_field, transform, _ = FIELD_MAPPING[param_key]
+
         try:
             new_value = transform(raw_value)
         except Exception as e:
@@ -121,7 +121,6 @@ def axis_param_change_with_mapping(xml_data: str, axis_lines: list) -> str:
 
     mds_node.text = mds_text
     return ET.tostring(root, encoding="unicode")
-
 
 def axis_param_change_with_matching(xml_data: str, axis_lines: list) -> str:
     if not xml_data:
@@ -159,7 +158,8 @@ def axis_param_change_with_matching(xml_data: str, axis_lines: list) -> str:
             print(f"[Warning] Skipping unmapped param: {param_key}")
             continue
 
-        physical_field, transform = FIELD_MAPPING[param_key]
+        physical_field, transform, _ = FIELD_MAPPING[param_key]
+
                 
         try:
             new_value = transform(raw_value)
@@ -179,3 +179,58 @@ def axis_param_change_with_matching(xml_data: str, axis_lines: list) -> str:
 
     mds_node.text = mds_text
     return ET.tostring(root, encoding="unicode")
+
+def read_axis_param_from_xml_with_matching(filtered_names: list[str], filtered_values: list[str], xml_data: str) -> tuple[list[str], list[str]]:
+    if not xml_data:
+        raise ValueError("Empty XML data.")
+
+    root = ET.fromstring(xml_data)
+
+    item_name_node = root.find(".//ItemName")
+    if item_name_node is None or not item_name_node.text:
+        raise ValueError("ItemName not found in XML.")
+
+    mds_node = root.find(".//AchsMds")
+    if mds_node is None or not mds_node.text:
+        raise ValueError("AchsMds not found or empty.")
+
+    mds_text = mds_node.text
+
+    param_names = []
+    param_values = []
+
+    for name, expected in zip(filtered_names, filtered_values):
+        try:
+            _, param_key = name.split(".", 1)
+        except ValueError:
+            continue
+
+        mapping = FIELD_MAPPING.get(param_key)
+        if not mapping:
+            print(f"[Warning] No mapping found for {param_key}")
+            continue
+
+        mapped_field, _, untransform = mapping
+        matched = False
+
+        for line in mds_text.strip().splitlines():
+            match = re.match(r'^([^\s]+)\s+([^\s\(\)]+)', line.strip())
+            if not match:
+                continue
+            physical_field, value = match.groups()
+
+            if physical_field.strip().endswith(mapped_field.strip()):
+                try:
+                    original_value = untransform(value)
+                except Exception as e:
+                    original_value = value
+                param_names.append(name)
+                param_values.append(original_value)
+                matched = True
+                break
+
+        if not matched:
+            print(f"[Warning] Cannot find field '{mapped_field}' for {name} in XML")
+
+    return param_names, param_values
+

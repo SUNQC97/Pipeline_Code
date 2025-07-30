@@ -12,7 +12,8 @@ from lib.utils.xml_read_write import (
     axis_param_change_with_mapping, 
     axis_param_change_with_matching,
     read_trafo_lines_from_xml,
-    clean_and_insert_trafo_lines
+    clean_and_insert_trafo_lines,
+    read_axis_param_from_xml_with_matching
 )
 from lib.services.client import convert_trafo_lines, convert_axis_lines, fetch_axis_json, fetch_trafo_json, read_all_kanal_configs
 
@@ -227,6 +228,7 @@ def read_all_trafo_from_twincat(sysman, node_path: str, all_configs: dict) -> di
 
         kanal_name = f"Kanal_{int(item_id)}"
         param_names, param_values = read_trafo_lines_from_xml(xml_data)
+        param_values = descale_trafo_values(param_names, param_values)
 
         all_configs[kanal_name] = {
             "trafo": {
@@ -241,7 +243,6 @@ def read_all_trafo_from_twincat(sysman, node_path: str, all_configs: dict) -> di
     except Exception as e:
         print(f"[Error] Failed to read TwinCAT node: {e}")
         return None
-
 
 def write_axis_param_to_twincat(sysman, node_path: str, axis_lines: list):
     if not sysman:
@@ -324,7 +325,103 @@ def write_all_axis_param_to_twincat(sysman, node_path: str, all_configs: list):
     except Exception as e:
         print(f"Error during TwinCAT update: {e}")
         return False
+    
+def read_all_axis_from_twincat(sysman, node_path: str, all_configs: dict) -> dict | None:
+    if not sysman:
+        print("TwinCAT sysman is not initialized.")
+        return False
+    try:
+        node = sysman.LookupTreeItem(node_path)
+        xml_data = node.ProduceXml(True)
 
+        root = ET.fromstring(xml_data)
+
+        item_type = root.findtext("ItemType")
+        axis_name_twincat = root.findtext("ItemName")
+        axis_def = root.find("IsgAxisDef")
+
+        if axis_def is None:
+            print(f"[ERROR] No IsgAxisDef block in XML for {node_path}")
+            return False
+        
+        DefaultChannel = axis_def.findtext("DefaultChannel") 
+        DefaultIndex = axis_def.findtext("DefaultIndex")
+        index = int(DefaultIndex)
+
+        if item_type != "403":
+            print(f"Node {node_path} is not a valid Axis node.")
+            return False
+        if not axis_name_twincat or not DefaultChannel or not DefaultIndex:
+            print(f"Node {node_path} is missing required Axis parameters.")
+            return False
+        
+        kanal_name = f"Kanal_{DefaultChannel}"
+
+        axis_config = all_configs.get(kanal_name, {}).get("axis", {})
+        if not axis_config:
+            print(f"No axis configuration found for {kanal_name}.")
+            return False
+        
+        # 原始参数
+        all_param_names = axis_config.get("param_names", [])
+        all_param_values = [str(v) for v in axis_config.get("param_values", [])]
+
+        # 筛选当前轴参数
+        prefixes = [f"Axis_{index+1}", f"Achse_{index+1}", f"Ext_{index+1}"]
+        filtered_names = []
+        filtered_values = []
+        for name, value in zip(all_param_names, all_param_values):
+            if any(name.startswith(f"{p}.") for p in prefixes):
+                filtered_names.append(name)
+                filtered_values.append(value)
+
+        if not filtered_names:
+            print(f"No valid axis parameters found for {kanal_name}.")
+            return False
+
+        # 读取 XML 中的实际值
+        param_names, param_values = read_axis_param_from_xml_with_matching(filtered_names, filtered_values, xml_data)
+
+        # === 精确更新 all_configs 中的参数值 ===
+        if kanal_name not in all_configs:
+            all_configs[kanal_name] = {}
+        if "axis" not in all_configs[kanal_name]:
+            all_configs[kanal_name]["axis"] = {"param_names": [], "param_values": []}
+
+        axis_data = all_configs[kanal_name]["axis"]
+        existing_names = axis_data.get("param_names", [])
+        existing_values = axis_data.get("param_values", [])
+
+        # 构建 name → value 字典
+        value_dict = dict(zip(existing_names, existing_values))
+
+        # 更新或新增 param
+        for name, value in zip(param_names, param_values):
+            value_dict[name] = value
+
+        # 先保留原有顺序中的 name
+        new_names = []
+        new_values = []
+        for name in existing_names:
+            if name in value_dict:
+                new_names.append(name)
+                new_values.append(value_dict.pop(name))
+
+        # 再追加新 name（旧的顺序中没有的）
+        for name, value in value_dict.items():
+            new_names.append(name)
+            new_values.append(value)
+
+        # 写入 all_configs
+        all_configs[kanal_name]["axis"]["param_names"] = new_names
+        all_configs[kanal_name]["axis"]["param_values"] = new_values
+
+        return all_configs
+
+    except Exception as e:
+        print(f"Error during TwinCAT update: {e}")
+        return False
+  
 def scale_trafo_values(param_names: list, param_values: list, factor: int = 10000) -> list:
     """
     对所有 param[...] 项进行缩放，id 保持原值。
@@ -340,5 +437,22 @@ def scale_trafo_values(param_names: list, param_values: list, factor: int = 1000
             scaled = str(value)  # fallback fallback fallback
         scaled_values.append(scaled)
     return scaled_values
+
+def descale_trafo_values(param_names: list, param_values: list, factor: int = 10000) -> list:
+    """
+    对所有 param[...] 项进行反缩放（从 TwinCAT 转换回 Virtuos 格式）。
+    trafo[0].id 保持原样，param[...] 除以 factor。
+    """
+    descaled_values = []
+    for name, value in zip(param_names, param_values):
+        try:
+            if "param[" in name:
+                descaled = str(float(value) / factor)
+            else:
+                descaled = str(value)
+        except ValueError:
+            descaled = str(value)  # fallback
+        descaled_values.append(descaled)
+    return descaled_values
 
     

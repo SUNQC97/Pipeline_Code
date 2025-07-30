@@ -162,3 +162,48 @@ def extract_axis_param_list(axis_params: dict):
     param_names = list(axis_params.keys())
     param_values = list(axis_params.values())
     return param_names, param_values
+
+def write_params_to_virtuos(vz, parameter_path, trafo_names, trafo_values, axis_names, axis_values):
+    for name, value in zip(trafo_names, trafo_values):
+        converted_name = convert_param_name_for_write(name)
+        write_single_param_to_virtuos(vz, parameter_path, converted_name, value)
+    for name, value in zip(axis_names, axis_values):
+        converted_name = convert_param_name_for_write(name)
+        write_single_param_to_virtuos(vz, parameter_path, converted_name, value)
+
+def write_single_param_to_virtuos(vz, parameter_path: str, param_name: str, param_value):
+    """
+    Write parameter from opcua to Virtuos.
+    """
+    try:
+        full_path = make_virtuos_param_path(parameter_path, param_name)
+        value_str = str(param_value)  # 必须是字符串
+        status = vz.setParameterBlock(full_path, value_str)
+        if status == vz.V_SUCCD:
+            print(f"[OK] Wrote {full_path} = {value_str}")
+            return True
+        else:
+            print(f"[ERROR] Failed to write {full_path} (status: {status})")
+            return False
+    except Exception as e:
+        print(f"[EXCEPTION] Failed to write {param_name} to Virtuos: {e}")
+        return False
+    
+def make_virtuos_param_path(base_path: str, param_name: str) -> str:
+    """
+    Create a full parameter path for Virtuos based on the base path and parameter name.
+    """
+    return f"{base_path}.[{param_name}]"
+
+def convert_param_name_for_write(param_name: str) -> str:
+    # Trafo: trafo[0].id → KinID
+    if param_name == "trafo[0].id":
+        return "KinID"
+
+    # Trafo: trafo[0].param[5] → par_5
+    if param_name.startswith("trafo[0].param["):
+        index = param_name[len("trafo[0].param["):-1]
+        return f"par_{index}"
+
+    # Axis/Ext: 保持原样，如 Axis_1.s_max → Axis_1.s_max
+    return param_name
