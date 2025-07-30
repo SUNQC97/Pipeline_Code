@@ -279,11 +279,6 @@ def write_all_axis_param_to_twincat(sysman, node_path: str, all_configs: list):
         
         print(f"Axis '{axis_name_twincat}' in Kanal '{kanal_name}' updated successfully.")
 
-        #for debugging
-        print(f"[debug] axis_lines: {axis_lines}")
-        print(f"[debug] node_path: {node_path}")
-
-
         return True
 
     except Exception as e:

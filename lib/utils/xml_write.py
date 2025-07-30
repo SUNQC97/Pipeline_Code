@@ -129,7 +129,12 @@ def axis_param_change_with_matching(xml_data: str, axis_lines: list) -> str:
             print(f"[Warning] Invalid line format: {line}")
             continue
 
+        if param_key not in FIELD_MAPPING:
+            print(f"[Warning] Skipping unmapped param: {param_key}")
+            continue
+
         physical_field, transform = FIELD_MAPPING[param_key]
+                
         try:
             new_value = transform(raw_value)
         except Exception as e:
