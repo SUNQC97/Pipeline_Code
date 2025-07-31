@@ -180,7 +180,7 @@ def write_single_param_to_virtuos(vz, parameter_path: str, param_name: str, para
         value_str = str(param_value)  # 必须是字符串
         status = vz.setParameterBlock(full_path, value_str)
         if status == vz.V_SUCCD:
-            print(f"[OK] Wrote {full_path} = {value_str}")
+            #print(f"[OK] Wrote {full_path} = {value_str}")
             return True
         else:
             print(f"[ERROR] Failed to write {full_path} (status: {status})")

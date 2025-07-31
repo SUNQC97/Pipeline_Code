@@ -1,5 +1,6 @@
 import sys
 import os
+import asyncio
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 import re
 from nicegui import ui
@@ -33,6 +34,7 @@ from lib.services.client import (
     read_all_kanal_configs,
     write_all_configs_to_opcua
 )
+from lib.services.opcua_tool import ConfigChangeHandler
 
 
 available_paths = []
@@ -74,13 +76,17 @@ def show_twincat_page():
     log = ui.textarea(label='Log').props('readonly').style('width: 100%; height: 200px')
     
     current_dir = Path(__file__).parent
+
     # Load axis mapping from JSON file
     mapping_path = current_dir.parent.parent / "lib" / "config" / "Kanal_Axis_mapping.json"
 
     with open(mapping_path, "r", encoding="utf-8") as f:
         axis_mapping = json.load(f)
 
-    available_kanals = list(axis_mapping.keys())
+    #available_kanals = list(axis_mapping.keys())
+
+    available_kanals = list(kanal_inputs.keys())
+
 
     def append_log(text: str):
         log.value += text + '\n'
@@ -401,9 +407,7 @@ def show_twincat_page():
 
             append_log(f"\n[Summary] Success: {len(success)} | Failed: {len(failed)}")
             write_all_configs_to_opcua(opc_client, all_configs)  
-            append_log("All Kanal configurations updated in OPC UA Server.")
-
-               
+            append_log("All Kanal configurations updated in OPC UA Server.")    
 
         def apply_all_axis_to_twincat_with_mapping():
             if not state.sysman:
@@ -595,12 +599,21 @@ def show_twincat_page():
         ui.button("Read Trafo Parameters from All Kanal", on_click=read_trafo_from_all_kanals, color='blue')
         ui.button("Read Axis Parameters from All Kanal", on_click=read_all_axis_from_twincat_with_matching, color='blue')
 
-    def one_click_full_apply():
+    async def one_click_full_apply():
         append_log("=== [Start] One-click CNC Init + Write ===")
 
         try:
-            init_sysman()
-            connect_client()
+            if not state.sysman:
+                init_sysman()
+                if not state.sysman:
+                    append_log("Failed to initialize TwinCAT project.")
+                    return
+
+            if not opc_client:
+                connect_client()
+                if not opc_client:
+                    append_log("Failed to connect OPC UA Client.")
+                    return
 
             # CNC结构遍历（确保 available_paths 被更新）
             append_log("Browsing CNC structure...")
@@ -653,8 +666,38 @@ def show_twincat_page():
         except Exception as e:
             append_log(f"[Error] Exception during full read: {e}")
 
+    opc_subscription_started = False  # 在外层定义
+    async def start_opcua_client_listener():
+        nonlocal opc_client
+        loop = asyncio.get_running_loop()  # 👈 获取主线程中的 loop
 
+        if not opc_client:
+            opc_client = connect_opcua_client()
+            if not opc_client:
+                append_log("Failed to connect OPC UA Client.")
+                return
+            append_log("OPC UA Client connected.")
+
+        try:
+            # 👇 把 loop 显式传入
+            
+            loop = asyncio.get_running_loop()
+            handler = ConfigChangeHandler(callback=one_click_full_apply, loop=loop)
+            subscription = opc_client.create_subscription(100, handler)
+
+            for kanal in kanal_inputs.keys():
+                kanal_node = opc_client.get_objects_node().get_child([f"2:{kanal}"])
+                for var_name in ["TrafoConfigJSON", "AxisConfigJSON"]:
+                    var_node = kanal_node.get_child([f"2:{var_name}"])
+                    subscription.subscribe_data_change(var_node)
+                    append_log(f"[LISTENING] {kanal}/{var_name}")
+
+            append_log("[OK] OPC UA Client listener active.")
+
+        except Exception as e:
+            append_log(f"[Error] OPC UA Listener failed: {e}")
 
 
     ui.button("One-click CNC Init + Write", on_click=one_click_full_apply, color='primary').props('raised')
     ui.button("One-click Read", on_click=one_click_full_read, color='primary').props('raised')                
+    ui.button("Start OPC UA Listener", on_click=start_opcua_client_listener, color='purple')
