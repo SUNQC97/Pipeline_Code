@@ -712,7 +712,7 @@ def show_twincat_page():
         else:
             append_log("[INFO] No active listener to stop.")
 
-    ui.button("One-click CNC Init + Write", on_click=one_click_full_apply, color='primary').props('raised')
-    ui.button("One-click Read", on_click=one_click_full_read, color='primary').props('raised')                
-    ui.button("Start OPC UA Listener", on_click=start_opcua_client_listener, color='purple')
-    ui.button("Stop OPC UA Listener", on_click=stop_opcua_client_listener, color='purple')
+    #ui.button("One-click CNC Init + Write", on_click=one_click_full_apply, color='primary').props('raised')
+    #ui.button("One-click Read", on_click=one_click_full_read, color='primary').props('raised')
+    #ui.button("Start OPC UA Listener", on_click=start_opcua_client_listener, color='purple')
+    #ui.button("Stop OPC UA Listener", on_click=stop_opcua_client_listener, color='purple')

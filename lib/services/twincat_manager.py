@@ -9,187 +9,441 @@ from lib.services.TwinCAT_interface import (
     init_project, export_cnc_node, import_cnc_node, handle_configuration,
     load_config, collect_paths, get_export_path, get_import_path,
     add_child_node, write_trafo_lines_to_twincat, write_axis_param_to_twincat,
-    write_all_trafo_to_twincat, write_all_axis_param_to_twincat
+    write_all_trafo_to_twincat, write_all_axis_param_to_twincat,
+    read_all_trafo_from_twincat, read_all_axis_from_twincat
 )
 from lib.services.client import (
-    connect_opcua_client, disconnect_opcua_client,
-    convert_trafo_lines, fetch_trafo_json, fetch_axis_json,
-    read_all_kanal_configs
+    fetch_axis_json, convert_trafo_lines, write_all_configs_to_opcua,
+    read_all_kanal_configs, fetch_trafo_json
 )
-
+import lib.services.client as client
+import asyncio
+import pythoncom
 
 class TwinCATManager:
-    def __init__(self, log_callback):
-        self.state = state
-        self.log = log_callback
-        self.sysman = self.state.sysman
-        self.axis_mapping = self._load_mapping()
+    def __init__(
+        self,
+        sysman=None,
+        available_paths: list[str] = None,
+        log_func: callable = None,
+        opc_client=None,
+        logger: callable = None
+    ):
+        self.log = log_func or logger or print
+        self.status = {}
+
+        self.sysman = sysman
+        self.opc_client = opc_client
+
         self.config = load_config()
-        self.opc_client = None
-        self.available_paths = []
+        self.project_path = self.config["TWINCAT_PROJECT_PATH"]
+        self.ams_net_id = self.config["AMS_NET_ID"]
+        self.export_base = self.config["EXPORT_BASE_DIR"]
+        self.import_base = self.config["IMPORT_BASE_DIR"]
 
-    def _log(self, text: str):
-        if self.log:
-            self.log(text)
+        self.available_paths = available_paths if available_paths is not None else []
+        self.axis_mapping = self.load_axis_mapping()
+        self.kanal_inputs = kanal_inputs
 
-    def _load_mapping(self):
-        current_dir = Path(__file__).parent
-        mapping_path = current_dir.parent.parent / "lib" / "config" / "Kanal_Axis_mapping.json"
+    def log(self, message):
+        self.logger(message)
+
+    def load_axis_mapping(self):
+        mapping_path = Path(__file__).parent.parent / "config" / "Kanal_Axis_mapping.json"
         with open(mapping_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    def init_sysman(self, project_path, ams_id):
-        if self.state.sysman is None:
-            self._log("Initializing TwinCAT project...")
-            self.state.sysman = init_project(project_path, ams_id)
-            self.sysman = self.state.sysman
-            if self.sysman:
-                self._log("TwinCAT project initialized.")
-                return True
-            else:
-                self._log("Failed to initialize TwinCAT project.")
-                return False
+    def init_project(self):
+        if not self.sysman:
+            self.sysman = init_project(self.project_path, self.ams_net_id)
+        return self.sysman is not None
+
+    def browse_structure(self, structure_key_or_keyword="CNC Configuration"):
+        structure_map = {
+            "I/O Configuration": "TIIC",
+            "I/O Devices": "TIID",
+            "Real-Time Configuration": "TIRC",
+            "Route Settings": "TIRR",
+            "Additional Tasks": "TIRT",
+            "Real-Time Settings": "TIRS",
+            "PLC Configuration": "TIPC",
+            "NC Configuration": "TINC",
+            "CNC Configuration": "TICC",
+            "CAM Configuration": "TIAC",
+        }
+
+        if not self.sysman:
+            raise RuntimeError("Project not initialized")
+
+        if structure_key_or_keyword in structure_map:
+            keyword = structure_map[structure_key_or_keyword]
+        elif structure_key_or_keyword in structure_map.values():
+            keyword = structure_key_or_keyword
         else:
-            self._log("TwinCAT project already initialized.")
-            return True
+            raise KeyError(f"'{structure_key_or_keyword}' is not a valid structure key or keyword")
 
-    def export_node(self, cnc_path, export_path):
+        root_node = self.sysman.LookupTreeItem(keyword)
+        self.available_paths = collect_paths(root_node, prefix=keyword)
+        return self.available_paths
+    
+    def export_node(self, node_path: str, export_path: str):
         if not self.sysman:
-            self._log("Please initialize the project first.")
-            return
-        export_cnc_node(self.sysman, cnc_path, export_path)
-        self._log(f"Exported to {export_path}")
+            raise RuntimeError("Project not initialized")
+        export_cnc_node(self.sysman, node_path, export_path)
+        self.log(f"Exported {node_path} to {export_path}")
 
-    def import_node(self, cnc_path, import_path):
+    def import_node(self, node_path: str, import_path: str):
         if not self.sysman:
-            self._log("Please initialize the project first.")
-            return
-        import_cnc_node(self.sysman, cnc_path, import_path)
-        self._log(f"Imported from {import_path}")
+            raise RuntimeError("Project not initialized")
+        import_cnc_node(self.sysman, node_path, import_path)
+        self.log(f"Imported {import_path} to {node_path}")
 
     def activate_config(self):
         if not self.sysman:
-            self._log("Please initialize the project first.")
-            return
+            raise RuntimeError("Project not initialized")
         handle_configuration(self.sysman)
-        self._log("Configuration activated.")
-
-    def browse_structure(self, keyword):
+        self.log("Configuration activated.")
+    
+    def add_child(self, parent_path: str, name: str, type_str: str) -> tuple[bool, str]:
+        type_map = {
+            "Axis": 401,
+            "Kanal": 403
+        }
+        subtype = type_map.get(type_str)
         if not self.sysman:
-            self._log("Please initialize the project first.")
-            return []
-        root_node = self.sysman.LookupTreeItem(keyword)
-        self.available_paths = collect_paths(root_node, prefix=keyword)
-        self._log(f"Found {len(self.available_paths)} nodes.")
-        return self.available_paths
+            return False, "TwinCAT project not initialized."
+        if not subtype:
+            return False, f"Unknown type: {type_str}"
 
-    def connect_opcua(self):
+        try:
+            result = add_child_node(self.sysman, parent_path, name, subtype)
+            if result:
+                return True, f"Added {type_str} '{name}' (Subtype {subtype}) under '{parent_path}'"
+            else:
+                return False, "Failed to add node."
+        except Exception as e:
+            return False, f"Error during add: {e}"
+
+    #### OPC UA Client Methods ####
+
+    def connect_client(self):
         if self.opc_client:
-            self._log("OPC Client already connected.")
-            return self.opc_client
-        self.opc_client = connect_opcua_client()
+            self.status = "already_connected"
+            self.log("OPC Client is already connected.")
+            return True
+        self.opc_client = client.connect_opcua_client()
         if self.opc_client:
-            self._log("OPC Client connected successfully.")
+            self.status = "connected"
+            self.log("OPC Client connected successfully.")
+            return True
         else:
-            self._log("Failed to connect OPC Client.")
-        return self.opc_client
+            self.status = "connect_failed"
+            self.log("Failed to connect OPC Client.")
+            return False
 
-    def disconnect_opcua(self):
+    def disconnect_client(self):
         if self.opc_client:
-            disconnect_opcua_client(self.opc_client)
-            self._log("OPC Client disconnected.")
+            client.disconnect_opcua_client(self.opc_client)
+            self.log("OPC Client disconnected.")
             self.opc_client = None
-
-    def write_trafo_for_kanal(self, kanal):
+            self.status = "disconnected"
+            return True
+        else:
+            self.status = "no_client"
+            self.log("No active OPC Client instance.")
+            return False
+        
+    def apply_trafo_to_twincat(self, kanal: str, cnc_path: str):
         if not self.sysman:
-            self._log("Initialize TwinCAT project first.")
-            return
-        if not self.opc_client:
-            self._log("Connect to OPC UA Client first.")
-            return
-        data = fetch_trafo_json(self.opc_client, kanal)
-        trafo_lines = convert_trafo_lines(data.get("param_names", []), data.get("param_values", []))
-        write_trafo_lines_to_twincat(self.sysman, kanal, trafo_lines)
-        self._log(f"Trafo parameters for {kanal} applied.")
+            self.log("Please initialize the TwinCAT project first.")
+            return False
 
-    def write_all_kanals(self):
-        if not self.sysman:
-            self._log("Initialize TwinCAT project first.")
-            return
         if not self.opc_client:
-            self._log("Connect to OPC UA Client first.")
-            return
-        kanal_paths = [p for p in self.available_paths if p.split("^")[-1].lower().startswith(("kanal", "channel"))]
-        configs = read_all_kanal_configs(self.opc_client, kanal_inputs)
+            self.log("Please connect to OPC UA Client first.")
+            return False
+
+        if not kanal:
+            self.log("Please select a Kanal.")
+            return False
+
+        try:
+            data = fetch_trafo_json(self.opc_client, kanal)
+            trafo_lines = convert_trafo_lines(data.get("param_names", []), data.get("param_values", []))
+            write_trafo_lines_to_twincat(self.sysman, cnc_path, trafo_lines)
+            self.log(f"Trafo parameters for {kanal} applied to TwinCAT.")
+            return True
+        except Exception as e:
+            self.log(f"[Error] {e}")
+            self.log("Failed to apply trafo to TwinCAT node.")
+            return False   
+
+    def apply_trafo_to_all_kanals(self, available_paths: list[str]):
+        if not self.sysman:
+            self.log("Please initialize the TwinCAT project first.")
+            return False
+        if not self.opc_client:
+            self.log("Please connect to OPC UA Client first.")
+            return False
+
+        kanal_paths = [
+            path for path in available_paths
+            if path.split("^")[-1].lower().startswith(("kanal", "channel"))
+        ]
+
+        if not kanal_paths:
+            self.log("[Warning] No Kanal/Channel paths found.")
+            return False
+
+        self.log(f"[Info] Found {len(kanal_paths)} Kanal/Channel nodes.")
+
+        success = []
+        failed = []
+
+        try:
+            all_configs = read_all_kanal_configs(self.opc_client, self.kanal_inputs)
+        except Exception as e:
+            self.log(f"[Error] Failed to read OPC UA config: {e}")
+            return False
+
         for path in kanal_paths:
             try:
-                write_all_trafo_to_twincat(self.sysman, path, configs)
-                self._log(f"Wrote to {path}")
+                if not all_configs:
+                    self.log(f"[Warning] No configurations found for {path}. Skipping.")
+                    continue
+                write_all_trafo_to_twincat(self.sysman, path, all_configs)
+                success.append(path)
             except Exception as e:
-                self._log(f"Failed to write {path}: {e}")
+                self.log(f"[Error] Failed to write to {path}: {e}")
+                failed.append(path)
 
-    def write_axis_with_mapping(self, kanal):
-        if kanal not in self.axis_mapping:
-            self._log(f"Kanal '{kanal}' not found in mapping.")
-            return
-        data = fetch_axis_json(self.opc_client)
-        axis_lines = convert_trafo_lines(data.get("param_names", []), data.get("param_values", []))
-        kanal_mapping = self.axis_mapping[kanal]
-        axis_names = [k for k in kanal_mapping if re.match(r'^(Axis_|Achse_|Ext_)\d+', k)]
-        for axis_name in sorted(axis_names):
-            twincat_axis = kanal_mapping.get(axis_name)
-            if not twincat_axis:
-                self._log(f"[Mapping Missing] {axis_name}")
-                continue
-            path = next((p for p in self.available_paths if p.endswith(f"^{twincat_axis}")), None)
-            if not path:
-                self._log(f"[Path Missing] {twincat_axis}")
-                continue
-            single_lines = [line for line in axis_lines if line.startswith(f"{axis_name}.")]
-            if not single_lines:
-                self._log(f"[No Params] {axis_name}")
-                continue
-            write_axis_param_to_twincat(self.sysman, path, single_lines)
-            self._log(f"{axis_name} written to {path}")
+        self.log(f"\\n[Summary] Success: {len(success)} | Failed: {len(failed)}")
+        return True
 
-    def write_axis_with_matching(self):
-        axis_paths = [p for p in self.available_paths if p.count("^") == 3 and p.split("^")[-1].lower().startswith(("axis_", "achse_", "ext_"))]
-        configs = read_all_kanal_configs(self.opc_client, kanal_inputs)
-        for path in axis_paths:
-            try:
-                result = write_all_axis_param_to_twincat(self.sysman, path, configs)
-                if result:
-                    self._log(f"[OK] {path}")
-                else:
-                    self._log(f"[Fail] {path}")
-            except Exception as e:
-                self._log(f"[Error] {e} at {path}")
-                
-    def apply_one_axis_to_path(self, target_path):
-        from lib.services.client import fetch_axis_json, convert_trafo_lines
-        from lib.services.TwinCAT_interface import write_axis_param_to_twincat
-
-        if not self.sysman or not self.opc_client:
-            self._log("Please initialize project and connect OPC UA first.")
-            return
-
-        data = fetch_axis_json(self.opc_client)
-        axis_lines = convert_trafo_lines(data.get("param_names", []), data.get("param_values", []))
-        write_axis_param_to_twincat(self.sysman, target_path, axis_lines)
-        self._log("Single axis written.")
-
-
-    def browse_structure_and_return_paths(self, keyword):
+    def read_trafo_from_all_kanals(self, all_configs: dict, available_paths: list[str]) -> dict:
         if not self.sysman:
-            self._log("Please initialize the project first.")
-            return []
-        return self.browse_structure(keyword)
+            self.log("Please initialize the TwinCAT project first.")
+            return all_configs
 
+        if not self.opc_client:
+            self.log("Please connect to OPC UA Client first.")
+            return all_configs
 
-    def handle_upload_file(self, file_obj, save_dir):
-        os.makedirs(save_dir, exist_ok=True)
-        file_path = os.path.join(save_dir, file_obj.name)
-        with open(file_path, "wb") as f:
-            f.write(file_obj.content.read())
-        self._log(f"Uploaded and saved: {file_path}")
-        return file_path
+        kanal_paths = [
+            path for path in available_paths
+            if path.split("^")[-1].lower().startswith(("kanal", "channel"))
+        ]
+
+        if not kanal_paths:
+            self.log("[Warning] No Kanal/Channel paths found in available_paths.")
+            return all_configs
+
+        self.log(f"[Info] Found {len(kanal_paths)} Kanal/Channel nodes.")
+
+        if not all_configs:
+            self.log("[Warning] Input all_configs is empty. Abort.")
+            return all_configs
+
+        success = []
+        failed = []
+
+        for path in kanal_paths:
+            try:
+                updated = read_all_trafo_from_twincat(self.sysman, path, all_configs)
+                if updated:
+                    all_configs = updated
+                    success.append(path)
+                else:
+                    failed.append(path)
+            except Exception as e:
+                self.log(f"[Error] Failed to read from {path}: {e}")
+                failed.append(path)
+
+        self.log(f"\\n[Summary] Success: {len(success)} | Failed: {len(failed)}")
+
+        write_all_configs_to_opcua(self.opc_client, all_configs)
+        self.log("All Kanal configurations updated in OPC UA Server.")
+
+        return all_configs
+
+    def apply_all_axis_with_mapping(self, kanal: str) -> bool:
+        if not self.sysman:
+            self.log("Please initialize the TwinCAT project first.")
+            return False
+        if not self.opc_client:
+            self.log("Please connect to OPC UA Client first.")
+            return False
+
+        if kanal not in self.axis_mapping:
+            self.log(f"[Error] Selected Kanal '{kanal}' not found in mapping.")
+            return False
+
+        try:
+            data = fetch_axis_json(self.opc_client)
+            axis_lines = convert_trafo_lines(data.get("param_names", []), data.get("param_values", []))
+
+            kanal_mapping = self.axis_mapping[kanal]
+            axis_names = [k for k in kanal_mapping if re.match(r'^(Axis_|Achse_|Ext_)\\d+', k)]
+
+            success_axes = []
+            failed_axes = []
+
+            for axis_name in sorted(axis_names):
+                twincat_axis_name = kanal_mapping.get(axis_name)
+                if not twincat_axis_name:
+                    self.log(f"[Warning] No TwinCAT mapping found for {axis_name}")
+                    failed_axes.append(axis_name)
+                    continue
+
+                target_path = next(
+                    (p for p in self.available_paths if p.endswith(f"^{twincat_axis_name}")),
+                    None
+                )
+
+                if not target_path:
+                    self.log(f"[Warning] Path not found in available paths: {twincat_axis_name}")
+                    failed_axes.append(axis_name)
+                    continue
+
+                single_axis_lines = [line for line in axis_lines if line.startswith(f"{axis_name}.")]
+                if not single_axis_lines:
+                    self.log(f"[Warning] No parameters found for {axis_name}")
+                    failed_axes.append(axis_name)
+                    continue
+
+                write_axis_param_to_twincat(self.sysman, target_path, single_axis_lines)
+                success_axes.append(axis_name)
+                self.log(f"{axis_name} written to TwinCAT path: {target_path}")
+
+            if success_axes and not failed_axes:
+                self.log("All axis parameters applied to TwinCAT.")
+            elif success_axes:
+                self.log(f"Successfully applied: {', '.join(success_axes)}")
+                self.log(f"Failed/skipped: {', '.join(failed_axes)}")
+            else:
+                self.log("No axis parameters were successfully applied.")
+
+            return len(success_axes) > 0
+
+        except Exception as e:
+            self.log(f"[Error] {e}")
+            self.log("Failed to apply axis parameters to TwinCAT node.")
+            return False
+
+    def apply_all_axis_with_matching(self, available_paths: list[str]) -> bool:
+        if not self.sysman:
+            self.log("Please initialize the TwinCAT project first.")
+            return False
+
+        if not self.opc_client:
+            self.log("Please connect to OPC UA Client first.")
+            return False
+
+        axis_paths_all = [
+            path for path in available_paths
+            if path.count("^") == 3 and path.split("^")[-1].lower().startswith(("axis_", "achse_", "ext_"))
+        ]
+
+        if not axis_paths_all:
+            self.log("[Warning] No Axis/Achse paths found in available_paths.")
+            return False
+
+        self.log(f"[Info] Found {len(axis_paths_all)} Axis/Achse nodes.")
+
+        try:
+            all_configs = read_all_kanal_configs(self.opc_client, self.kanal_inputs)
+        except Exception as e:
+            self.log(f"[Error] Failed to fetch OPC UA Kanal configs: {e}")
+            return False
+
+        if not all_configs:
+            self.log("[Error] No configs retrieved from OPC UA.")
+            return False
+
+        success = []
+        failed = []
+
+        for path in axis_paths_all:
+            try:
+                result = write_all_axis_param_to_twincat(self.sysman, path, all_configs)
+                if result:
+                    success.append(path)
+                else:
+                    failed.append(path)
+            except Exception as e:
+                self.log(f"[Error] Exception while writing to {path}: {e}")
+                failed.append(path)
+
+        self.log("\\n[Summary] Axis write completed.")
+        self.log(f"Success: {len(success)}")
+        self.log(f"Failed: {len(failed)}")
+
+        if failed:
+            for f in failed:
+                self.log(f"[Failed] {f}")
+
+        return len(success) > 0
+
+    def read_all_axis_with_matching(self, all_configs: dict, available_paths: list[str]) -> dict:
+        if not self.sysman:
+            self.log("TwinCAT is not initialized. Please initialize it first.")
+            return all_configs
+
+        if not self.opc_client:
+            self.log("OPC UA client is not connected. Please connect first.")
+            return all_configs
+
+        axis_paths_all = [
+            path for path in available_paths
+            if path.count("^") == 3 and path.split("^")[-1].lower().startswith(("axis_", "achse_", "ext_"))
+        ]
+
+        if not axis_paths_all:
+            self.log("[Warning] No Axis/Achse paths found.")
+            return all_configs
+
+        self.log(f"[Info] Found {len(axis_paths_all)} Axis/Achse nodes.")
+
+        success = []
+        failed = []
+
+        for path in axis_paths_all:
+            try:
+                updated_config = read_all_axis_from_twincat(self.sysman, path, all_configs)
+                if updated_config:
+                    all_configs = updated_config
+                    success.append(path)
+                else:
+                    self.log(f"[Failed] Could not read from: {path}")
+                    failed.append(path)
+            except Exception as e:
+                self.log(f"[Error] Exception while reading from {path}: {e}")
+                failed.append(path)
+
+        self.log("\\n[Summary] Axis parameter reading completed.")
+        self.log(f"Successful: {len(success)}")
+        self.log(f"Failed: {len(failed)}")
+        for f in failed:
+            self.log(f"[Failed] {f}")
+
+        write_all_configs_to_opcua(self.opc_client, all_configs)
+        self.log("All axis configurations updated in OPC UA Server.")
+
+        return all_configs
+
+    def apply_one_axis(self, axis_path: str) -> bool:
+        if not self.sysman:
+            self.log("Please initialize the TwinCAT project first.")
+            return False
+        if not self.opc_client:
+            self.log("Please connect to OPC UA Client first.")
+            return False
+        try:
+            data = fetch_axis_json(self.opc_client)
+            axis_lines = convert_trafo_lines(data.get("param_names", []), data.get("param_values", []))
+            write_axis_param_to_twincat(self.sysman, axis_path, axis_lines)
+            self.log(f"Axis parameters applied to TwinCAT path: {axis_path}")
+            return True
+        except Exception as e:
+            self.log(f"[Error] {e}")
+            self.log("Failed to apply axis parameters to TwinCAT node.")
+            return False
