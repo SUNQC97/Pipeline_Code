@@ -40,7 +40,7 @@ from lib.services.opcua_tool import ConfigChangeHandler
 available_paths = []
 
 def show_twincat_page():
-  
+
     structure_map = {
         "I/O Configuration": "TIIC",
         "I/O Devices": "TIID",
@@ -68,10 +68,14 @@ def show_twincat_page():
     export_input = ui.input("Export File Path").props('outlined').style('width: 100%')
     import_input = ui.input("Import File Path").props('outlined').style('width: 100%')
 
+
     vs_input.value = TWINCAT_PROJECT_PATH
     ams_input.value = AMS_NET_ID
     export_input.value = EXPORT_BASE_DIR + "\\"
     import_input.value = IMPORT_BASE_DIR + "\\"
+
+    opc_subscription_started = False
+    listener_status_label = ui.label("Listener : Stopped").style('color: red; font-weight: bold;')
 
     log = ui.textarea(label='Log').props('readonly').style('width: 100%; height: 200px')
     
@@ -366,7 +370,6 @@ def show_twincat_page():
 
             append_log(f"\n[Summary] Success: {len(success)} | Failed: {len(failed)}")
 
-
         def read_trafo_from_all_kanals(all_configs):
             if not state.sysman:
                 append_log("Please initialize the TwinCAT project first.")
@@ -588,7 +591,6 @@ def show_twincat_page():
                 append_log(f"[Error] {e}")
                 append_log("Failed to apply trafo to TwinCAT node.")
 
-
         ui.button("Connect OPC UA Client", on_click=connect_client, color='green')
         ui.button("Disconnect OPC UA Client", on_click=disconnect_client, color='red')
         ui.button("Write Trafo Parameters", on_click=apply_trafo_to_twincat, color='blue')
@@ -666,9 +668,8 @@ def show_twincat_page():
         except Exception as e:
             append_log(f"[Error] Exception during full read: {e}")
 
-    opc_subscription_started = False  # 在外层定义
     async def start_opcua_client_listener():
-        nonlocal opc_client
+        nonlocal opc_client, opc_subscription_started
         loop = asyncio.get_running_loop()  # 👈 获取主线程中的 loop
 
         if not opc_client:
@@ -680,10 +681,11 @@ def show_twincat_page():
 
         try:
             # 👇 把 loop 显式传入
+            subscription = opc_client.create_subscription(
+                100,
+                ConfigChangeHandler(one_click_full_apply, loop)
+            )
             
-            loop = asyncio.get_running_loop()
-            handler = ConfigChangeHandler(callback=one_click_full_apply, loop=loop)
-            subscription = opc_client.create_subscription(100, handler)
 
             for kanal in kanal_inputs.keys():
                 kanal_node = opc_client.get_objects_node().get_child([f"2:{kanal}"])
@@ -692,12 +694,25 @@ def show_twincat_page():
                     subscription.subscribe_data_change(var_node)
                     append_log(f"[LISTENING] {kanal}/{var_name}")
 
+            listener_status_label.text = "Listener : Active"
+            listener_status_label.style('color: green; font-weight: bold;')
+            opc_subscription_started = True
             append_log("[OK] OPC UA Client listener active.")
 
         except Exception as e:
             append_log(f"[Error] OPC UA Listener failed: {e}")
 
+    async def stop_opcua_client_listener():
+        nonlocal opc_subscription_started
+        if opc_subscription_started:
+            opc_subscription_started = False
+            listener_status_label.text = "Listener : Stopped"
+            listener_status_label.style('color: red; font-weight: bold;')
+            append_log("[INFO] OPC UA listener manually marked as stopped.")
+        else:
+            append_log("[INFO] No active listener to stop.")
 
     ui.button("One-click CNC Init + Write", on_click=one_click_full_apply, color='primary').props('raised')
     ui.button("One-click Read", on_click=one_click_full_read, color='primary').props('raised')                
     ui.button("Start OPC UA Listener", on_click=start_opcua_client_listener, color='purple')
+    ui.button("Stop OPC UA Listener", on_click=stop_opcua_client_listener, color='purple')
