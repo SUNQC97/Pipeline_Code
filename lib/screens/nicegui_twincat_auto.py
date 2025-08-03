@@ -11,9 +11,12 @@ from lib.services.client import read_all_kanal_configs
 from opcua import Client
 from lib.services.TwinCAT_interface import collect_paths
 from dotenv import load_dotenv
+import time
+
+skip_write_back_in_TwinCAT = None
 
 def show_twincat_auto_page():
-
+    
     structure_map = {
         "I/O Configuration": "TIIC",
         "I/O Devices": "TIID",
@@ -81,10 +84,15 @@ def show_twincat_auto_page():
 
     async def one_click_full_apply():
         nonlocal opc_client
+        global skip_write_back_in_TwinCAT
 
-        append_log("=== [Start] One-click CNC Init + Write ===")
+        if skip_write_back_in_TwinCAT == "skip_once":
+            skip_write_back_in_TwinCAT = None
+            append_log("[INFO] Skipping write back to TwinCAT due to previous operation.")
+            return
 
         try:
+
             if not state.sysman:
                 init_sysman()
                 if not state.sysman:
@@ -92,14 +100,15 @@ def show_twincat_auto_page():
                     return
 
             if not opc_client:
-                opc_client = manager.connect_client()
+                manager.connect_client()
+                opc_client = manager.opc_client
                 if not manager.opc_client:
                     append_log("Failed to connect OPC UA Client.")
                     return
 
 
-            append_log("Browsing CNC structure...")
-            
+            #append_log("Browsing CNC structure...")
+
             # CNC Configuration is the root node
             structure_key = "CNC Configuration"
             keyword = structure_map[structure_key]
@@ -108,24 +117,42 @@ def show_twincat_auto_page():
             global available_paths
 
             available_paths = collect_paths(root_node, prefix=keyword)
-            append_log(f"Found {len(available_paths)} nodes.")
+            
+            #append_log(f"Found {len(available_paths)} nodes.")
 
             if not available_paths:
                 append_log("[Abort] Failed to browse CNC structure.")
                 return
 
-            append_log("Writing Trafo to all Kanal paths...")
+            #append_log("Writing Trafo to all Kanal paths...")
             manager.apply_trafo_to_all_kanals(available_paths)
 
-            append_log("Writing Axis with automatic matching...")
+            #append_log("Writing Axis with automatic matching...")
             manager.apply_all_axis_with_matching(available_paths)
 
             append_log("=== [Done] All parameters applied ===")
+
         except Exception as e:
             append_log(f"[Error] {e}")
+            
+        finally:
+            skip_write_back_in_TwinCAT = None  
 
     def one_click_full_read():
         nonlocal opc_client
+        global skip_write_back_in_TwinCAT 
+
+        skip_write_back_in_TwinCAT = "skip_once"
+
+        # Clear the skip flag after 2 seconds
+        async def clear_skip_flag():
+            global skip_write_back_in_TwinCAT
+            await asyncio.sleep(2)
+            if skip_write_back_in_TwinCAT == "skip_once":
+                skip_write_back_in_TwinCAT = None
+                await append_log("[INFO] Resetting skip flag after 2 seconds.")
+        asyncio.create_task(clear_skip_flag())
+
 
         append_log("=== [Start] One-click Read ===")
 
@@ -145,31 +172,35 @@ def show_twincat_auto_page():
             root_node = state.sysman.LookupTreeItem(keyword)
 
             available_paths = collect_paths(root_node, prefix=keyword)
-            append_log(f"Found {len(available_paths)} nodes.")
+            #append_log(f"Found {len(available_paths)} nodes.")
 
             if not available_paths:
                 append_log("[Abort] Failed to browse CNC structure.")
                 return
-                        
-            append_log("Step 1: Fetching base configs from OPC UA...")
+
+            # append_log("Step 1: Fetching base configs from OPC UA...")
 
 
-            append_log("Step 2: Reading Trafo from TwinCAT...")
+            #append_log("Step 2: Reading Trafo from TwinCAT...")
             manager.read_trafo_from_all_kanals(read_all_kanal_configs(opc_client, state.kanal_inputs), available_paths)
 
-            append_log("Step 3: Reading Axis from TwinCAT...")
+            #append_log("Step 3: Reading Axis from TwinCAT...")
             manager.read_all_axis_with_matching(read_all_kanal_configs(opc_client, state.kanal_inputs), available_paths)
-
-
+            append_log("=== [Done] All parameters read ===")
         except Exception as e:
             append_log(f"[Error] Exception during full read: {e}")
 
 
-    # OPC UA auto operations only, no manual write/import/export
+    # Start OPC UA Client listener
+    # This will listen for changes in the OPC UA server and trigger the callback
     async def start_opcua_client_listener():
         nonlocal opc_client, opc_subscription_started
         loop = asyncio.get_running_loop()
 
+        if opc_subscription_started:
+            append_log("[INFO] Listener already started.")
+            return  
+        
         if not opc_client:
             manager.connect_client()
             opc_client = manager.opc_client
@@ -181,8 +212,9 @@ def show_twincat_auto_page():
         try:
             subscription = opc_client.create_subscription(
                 100,
-                ConfigChangeHandler(one_click_full_apply, loop)
+                ConfigChangeHandler(callback=one_click_full_apply, loop=asyncio.get_running_loop())
             )
+
             for kanal in state.kanal_inputs.keys():
                 kanal_node = opc_client.get_objects_node().get_child([f"2:{kanal}"])
                 for var_name in ["TrafoConfigJSON", "AxisConfigJSON"]:
@@ -197,6 +229,7 @@ def show_twincat_auto_page():
 
         except Exception as e:
             append_log(f"[Error] OPC UA Listener failed: {e}")
+
 
     async def stop_opcua_client_listener():
         nonlocal opc_subscription_started

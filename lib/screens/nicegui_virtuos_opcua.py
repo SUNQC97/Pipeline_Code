@@ -10,6 +10,8 @@ from lib.screens.state import kanal_inputs
 from lib.services.opcua_tool import ConfigChangeHandler
 from lib.services.client import connect_opcua_client
 
+skip_write_back_in_virtuos = None
+
 def show_virtuos_server():
     global vz_env, vz, opc_server_instance, initialized, opc_client
     vz_env = None
@@ -138,7 +140,18 @@ def show_virtuos_server():
             await append_log(f"[EXCEPTION] Connection failed: {e}")
 
     async def refresh_all_on_server():
-        global vz, opc_server_instance
+        global vz, opc_server_instance, skip_write_back_in_virtuos
+
+        skip_write_back_in_virtuos = "skip_once"
+        
+        async def clear_skip_flag():
+            await asyncio.sleep(2)
+            global skip_write_back_in_virtuos
+            if skip_write_back_in_virtuos == "skip_once":
+                skip_write_back_in_virtuos = None
+                await append_log("[INFO] Resetting skip flag after 2 seconds.")
+        asyncio.create_task(clear_skip_flag())
+
         try:
             if not vz:
                 await append_log("[ERROR] Virtuos is not initialized.")
@@ -164,52 +177,73 @@ def show_virtuos_server():
         except Exception as e:
             await append_log(f"[EXCEPTION] {e}")
 
+
     async def write_back_all_from_opcua_server():
-        global vz, opc_server_instance
+        global vz, opc_server_instance, skip_write_back_in_virtuos
+        
+        if skip_write_back_in_virtuos == "skip_once":
+            skip_write_back_in_virtuos = None
+            await append_log("[INFO] Skipping write back to Virtuos as per configuration.")
+            return
+
         if not vz or not opc_server_instance:
             await append_log("[ERROR] Virtuos or OPC UA Server not initialized.")
             return
 
-        for kanal, input_field in kanal_inputs.items():
-            block_path = input_field.value.strip()
-            kanal_data = server.read_kanal_data_from_server_instance(opc_server_instance, kanal)
+        try:
+            for kanal, input_field in kanal_inputs.items():
+                block_path = input_field.value.strip()
+                kanal_data = server.read_kanal_data_from_server_instance(opc_server_instance, kanal)
 
-            Virtuos_tool.write_params_to_virtuos(
-                vz,
-                block_path,
-                kanal_data["trafo_names"],
-                kanal_data["trafo_values"],
-                kanal_data["axis_names"],
-                kanal_data["axis_values"]
-            )
+                Virtuos_tool.write_params_to_virtuos(
+                    vz,
+                    block_path,
+                    kanal_data["trafo_names"],
+                    kanal_data["trafo_values"],
+                    kanal_data["axis_names"],
+                    kanal_data["axis_values"]
+                )
 
-            await append_log(f"[OK] {kanal} → Virtuos written from server variables.")
+                await append_log(f"[OK] {kanal} → Virtuos written from server variables.")
+
+        except Exception as e:
+            await append_log(f"[EXCEPTION] Failed to write back from OPC UA Server: {e}")
+
+        finally:
+            skip_write_back_in_virtuos = None        
+
 
     async def read_and_start_multi_kanal_server():
-        global vz, opc_server_instance
+        global vz, opc_server_instance, skip_write_back_in_virtuos
+
+        skip_write_back_in_virtuos = "skip_once"
 
         kanal_data_dict = {}
 
-        for kanal, input_field in kanal_inputs.items():
-            block_path = input_field.value.strip()
 
-            trafo_names, trafo_values = Virtuos_tool.extract_trafo_param_list(vz, block_path)
-            axis_params = Virtuos_tool.read_Value_Model_json(vz, block_path)[1]
-            axis_names, axis_values = Virtuos_tool.extract_axis_param_list(axis_params)
+        try:
+            for kanal, input_field in kanal_inputs.items():
+                block_path = input_field.value.strip()
 
-            kanal_data_dict[kanal] = {
-                "trafo_names": trafo_names,
-                "trafo_values": trafo_values,
-                "axis_names": axis_names,
-                "axis_values": axis_values,
-            }
+                trafo_names, trafo_values = Virtuos_tool.extract_trafo_param_list(vz, block_path)
+                axis_params = Virtuos_tool.read_Value_Model_json(vz, block_path)[1]
+                axis_names, axis_values = Virtuos_tool.extract_axis_param_list(axis_params)
 
-        opc_server_instance = server.start_opc_server_multi_kanal(kanal_data_dict)
-        if opc_server_instance:
-            await append_log("[OK] Multi-Kanal OPC UA Server started.")
-        else:
-            await append_log("[ERROR] Failed to start OPC UA server.")
+                kanal_data_dict[kanal] = {
+                    "trafo_names": trafo_names,
+                    "trafo_values": trafo_values,
+                    "axis_names": axis_names,
+                    "axis_values": axis_values,
+                }
 
+            opc_server_instance = server.start_opc_server_multi_kanal(kanal_data_dict)
+            if opc_server_instance:
+                await append_log("[OK] Multi-Kanal OPC UA Server started.")
+            else:
+                await append_log("[ERROR] Failed to start OPC UA server.")
+        except Exception as e:
+            await append_log(f"[EXCEPTION] Failed to start OPC UA server: {e}")                            
+    
     async def stop_opc():
         global opc_server_instance
         try:
@@ -236,7 +270,7 @@ def show_virtuos_server():
                 return
             opc_subscription = opc_client.create_subscription(
                 100,
-                ConfigChangeHandler(write_back_all_from_opcua_server, loop)
+                ConfigChangeHandler(callback=write_back_all_from_opcua_server, loop=asyncio.get_running_loop())
             )
             for kanal in kanal_inputs.keys():
                 kanal_node = opc_client.get_objects_node().get_child([f"2:{kanal}"])

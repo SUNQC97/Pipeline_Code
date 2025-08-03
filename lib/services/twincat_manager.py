@@ -194,7 +194,7 @@ class TwinCATManager:
             self.log("[Warning] No Kanal/Channel paths found.")
             return False
 
-        self.log(f"[Info] Found {len(kanal_paths)} Kanal/Channel nodes.")
+        #self.log(f"[Info] Found {len(kanal_paths)} Kanal/Channel nodes.")
 
         success = []
         failed = []
@@ -216,7 +216,7 @@ class TwinCATManager:
                 self.log(f"[Error] Failed to write to {path}: {e}")
                 failed.append(path)
 
-        self.log(f"\\n[Summary] Success: {len(success)} | Failed: {len(failed)}")
+        self.log(f"[Summary] Kanal write completed. Success: {len(success)} | Failed: {len(failed)}")
         return True
 
     def read_trafo_from_all_kanals(self, all_configs: dict, available_paths: list[str]) -> dict:
@@ -237,7 +237,7 @@ class TwinCATManager:
             self.log("[Warning] No Kanal/Channel paths found in available_paths.")
             return all_configs
 
-        self.log(f"[Info] Found {len(kanal_paths)} Kanal/Channel nodes.")
+        #self.log(f"[Info] Found {len(kanal_paths)} Kanal/Channel nodes.")
 
         if not all_configs:
             self.log("[Warning] Input all_configs is empty. Abort.")
@@ -258,7 +258,7 @@ class TwinCATManager:
                 self.log(f"[Error] Failed to read from {path}: {e}")
                 failed.append(path)
 
-        self.log(f"\\n[Summary] Success: {len(success)} | Failed: {len(failed)}")
+        self.log(f"[Summary] Success: {len(success)} | Failed: {len(failed)}")
 
         write_all_configs_to_opcua(self.opc_client, all_configs)
         self.log("All Kanal configurations updated in OPC UA Server.")
@@ -312,13 +312,14 @@ class TwinCATManager:
 
                 write_axis_param_to_twincat(self.sysman, target_path, single_axis_lines)
                 success_axes.append(axis_name)
-                self.log(f"{axis_name} written to TwinCAT path: {target_path}")
+                #self.log(f"{axis_name} written to TwinCAT path: {target_path}")
 
             if success_axes and not failed_axes:
                 self.log("All axis parameters applied to TwinCAT.")
             elif success_axes:
-                self.log(f"Successfully applied: {', '.join(success_axes)}")
-                self.log(f"Failed/skipped: {', '.join(failed_axes)}")
+                #self.log(f"Successfully applied: {', '.join(success_axes)}")
+                #self.log(f"Failed/skipped: {', '.join(failed_axes)}")
+                self.log(f"[summary] Successfully applied: {len(success_axes)} | Failed/skipped: {len(failed_axes)}")
             else:
                 self.log("No axis parameters were successfully applied.")
 
@@ -373,9 +374,9 @@ class TwinCATManager:
                 self.log(f"[Error] Exception while writing to {path}: {e}")
                 failed.append(path)
 
-        self.log("\\n[Summary] Axis write completed.")
-        self.log(f"Success: {len(success)}")
-        self.log(f"Failed: {len(failed)}")
+        self.log(f"[Summary] Axis write completed. success: {len(success)}, failed: {len(failed)}")
+        #self.log(f"Success: {len(success)}")
+        #self.log(f"Failed: {len(failed)}")
 
         if failed:
             for f in failed:
@@ -401,7 +402,7 @@ class TwinCATManager:
             self.log("[Warning] No Axis/Achse paths found.")
             return all_configs
 
-        self.log(f"[Info] Found {len(axis_paths_all)} Axis/Achse nodes.")
+        #self.log(f"[Info] Found {len(axis_paths_all)} Axis/Achse nodes.")
 
         success = []
         failed = []
@@ -419,9 +420,9 @@ class TwinCATManager:
                 self.log(f"[Error] Exception while reading from {path}: {e}")
                 failed.append(path)
 
-        self.log("\\n[Summary] Axis parameter reading completed.")
-        self.log(f"Successful: {len(success)}")
-        self.log(f"Failed: {len(failed)}")
+        self.log(f"[Summary] Axis parameter reading completed. success: {len(success)}, failed: {len(failed)}")
+        #self.log(f"Successful: {len(success)}")
+        #self.log(f"Failed: {len(failed)}")
         for f in failed:
             self.log(f"[Failed] {f}")
 
