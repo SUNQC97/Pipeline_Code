@@ -78,46 +78,31 @@ def show_virtuos_server():
             return False
         return True
 
-    async def connect_to_existing_virtuos():
+    async def connect_to_existing_virtuos_before_start():
         global initialized, vz_env, vz
         try:
-            if not initialized:
-                load_dotenv()
-                project_path = os.getenv("project_path")
-                vz_env = Virtuos_tool.VirtuosEnv()
-                vz = vz_env.vz
-                vz.virtuosDLL()
-                vz.corbaInfo()
-                vz.startConnectionCorba()
-                if vz.isOpen() == vz.V_SUCCD:
-                    await append_log("[OK] Connected to already open Virtuos project.")
-                else:
-                    status = vz.getProject(project_path)
-                    if status == vz.V_SUCCD:
-                        await append_log("[OK] Project loaded and connected.")
-                    else:
-                        await append_log("[ERROR] No open project and failed to load.")
-                        return
+            if initialized:
+                await append_log("[INFO] Virtuos already initialized.")
+                return
+
+            vz_env = Virtuos_tool.VirtuosEnv()
+            vz = vz_env.connect_to_virtuos()
+            if vz:
                 initialized = True
+                await append_log("[OK] Connected to Virtuos.")
             else:
-                await append_log("[INFO] Already initialized.")
+                await append_log("[ERROR] Failed to connect to Virtuos.")
+
         except Exception as e:
-            await append_log(f"[EXCEPTION] Connection failed: {e}")
+            await append_log(f"[EXCEPTION] Failed to connect to Virtuos: {e}")
 
-    async def check_virtuos_and_opc_server():
-        if not vz:
-            await append_log("[ERROR] Virtuos is not initialized.")
-            return False
-        if not opc_server_instance:
-            await append_log("[ERROR] OPC UA Server is not running.")
-            return False
-        return True
 
-    async def connect_to_existing_virtuos():
+    async def connect_to_existing_virtuos_after_start():
         global initialized, vz_env, vz
         try:
             if not initialized:
-                load_dotenv()
+                dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
+                load_dotenv(dotenv_path)
                 project_path = os.getenv("project_path")
                 vz_env = Virtuos_tool.VirtuosEnv()
                 vz = vz_env.vz
@@ -303,7 +288,8 @@ def show_virtuos_server():
     ui.label("Virtuos → OPC UA Bridge").style("font-weight: bold; font-size: 20px;")
     with ui.row().style("margin-bottom: 10px"):
         listener_status_label
-    ui.button("Connect to Existing Virtuos", on_click=connect_to_existing_virtuos, color='blue')
+    ui.button("Connect to Existing Virtuos(before start)", on_click=connect_to_existing_virtuos_before_start, color='blue')
+    ui.button("Connect to Existing Virtuos(after start)", on_click=connect_to_existing_virtuos_after_start, color='cyan')
     ui.button("Read Data and Start OPC UA Server", on_click=read_and_start_multi_kanal_server, color='green')
     ui.button("Stop OPC UA Server", on_click=stop_opc, color='red')
     ui.button("Refresh All on Virtuos Server", on_click=refresh_all_on_server, color='purple')
