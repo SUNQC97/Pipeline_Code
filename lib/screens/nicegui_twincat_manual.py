@@ -24,6 +24,7 @@ from lib.services.TwinCAT_interface import (
     write_all_axis_param_to_twincat,
     read_all_trafo_from_twincat,
     read_all_axis_from_twincat,
+    import_child_node
 )
 from lib.services.client import (
     connect_opcua_client,
@@ -229,6 +230,32 @@ def show_twincat_page():
         except Exception as e:
             append_log(f"Error during add: {e}")
 
+    def do_import_Child_xml():
+        if not state.sysman:
+            append_log("Please initialize the TwinCAT project first.")
+            return
+        if not parent_path.value:
+            append_log("Please select a parent path.")
+            return
+
+        # 如果上传了 XML，就用它；否则用手动输入路径
+        xml_path = import_input.value.strip()
+
+        if not xml_path or not os.path.isfile(xml_path):
+            append_log("No valid XML path provided.")
+            return
+
+        try:
+            success = import_child_node(state.sysman, parent_path.value, xml_path)
+            if success:
+                append_log(f"Imported child node from '{xml_path}' under '{parent_path.value}'")
+            else:
+                append_log(f"Failed to import XML: {xml_path}")
+        except Exception as e:
+            append_log(f"Error during import: {e}")
+
+
+
     type_map = {
         "Axis": 401,
         "Kanal": 403
@@ -269,6 +296,7 @@ def show_twincat_page():
             options=["Axis", "Kanal"]
         ).props("outlined").style("width: 100%")
         ui.button("Add Node", on_click=do_add_fixed_type_child, color='accent')
+        ui.button("Import Child Node from XML", on_click=do_import_Child_xml, color='accent')
 
     with ui.expansion("OPC UA Client Control", icon='link'):
         from dotenv import load_dotenv
@@ -484,7 +512,7 @@ def show_twincat_page():
                 append_log("Please connect to OPC UA Client first.")
                 return
             
-            # 获取所有 Axis/Achse 根路径
+            # get all available paths
             axis_paths_all = [
                 path for path in available_paths
                 if path.count("^") == 3 and path.split("^")[-1].lower().startswith(("axis_", "achse_", "ext_"))
@@ -500,7 +528,7 @@ def show_twincat_page():
             success = []
             failed = []
 
-            # 预先读取所有 Kanal 配置一次
+            # Pre-read all Kanal configurations once
             all_configs = read_all_kanal_configs(opc_client, kanal_inputs)
             if not all_configs:
                 append_log("[Error] Failed to fetch Kanal configurations from OPC UA.")
@@ -518,7 +546,7 @@ def show_twincat_page():
                     append_log(f"[Error] Exception while writing to {path}: {e}")
                     failed.append(path)
 
-            # 输出最终统计结果
+            # Output final statistics
             append_log(f"\n[Summary] Axis write completed.")
             append_log(f"Success: {len(success)}")
             append_log(f"Failed: {len(failed)}")

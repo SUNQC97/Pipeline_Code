@@ -1,0 +1,4 @@
+nicegui
+python-dotenv
+opcua
+pywin32

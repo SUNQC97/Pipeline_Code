@@ -149,6 +149,35 @@ def add_child_node(sysman, parent_path, new_name, subtype):
     except Exception as e:
         print(f"Failed to add child node: {e}")
         return False
+    
+def import_child_node(sysman, parent_path, xml_file_path):
+    try:
+        parent_node = sysman.LookupTreeItem(parent_path)
+        if not parent_node:
+            print(f"Parent node not found: {parent_path}")
+            return False
+
+        # 正确的参数数量：4 个！
+        imported_node = parent_node.ImportChild(
+            xml_file_path,  # bstrFile
+            "",             # bstrBefore
+            True,           # bReconnect
+            ""              # bstrName
+        )
+
+        if imported_node is None:
+            print(f"ImportChild returned None. File: {xml_file_path}")
+            error_info = parent_node.GetLastXmlError()
+            print(f"XML import error: {error_info}")
+            return False
+
+        print(f"Successfully imported child from '{xml_file_path}' under '{parent_path}'")
+        return True
+
+    except Exception as e:
+        print(f"Failed to import child node: {e}")
+        return False
+
        
 def write_trafo_lines_to_twincat(sysman, node_path: str, trafo_lines: list):
     if not sysman:
