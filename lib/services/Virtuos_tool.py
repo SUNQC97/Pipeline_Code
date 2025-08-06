@@ -1,11 +1,13 @@
 from . import remote
 import os
 from dotenv import load_dotenv
+import re
 
 dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
 load_dotenv(dotenv_path)
 
 project_path = os.getenv("project_path")
+controller_path = os.getenv("extract_controller_path")
 
 class VirtuosEnv:
     def __init__(self):
@@ -207,3 +209,62 @@ def convert_param_name_for_write(param_name: str) -> str:
 
     # Axis/Ext: 保持原样，如 Axis_1.s_max → Axis_1.s_max
     return param_name
+
+
+
+
+def load_block_map() -> dict:
+    """
+    Load the block map from the file specified by the environment variable BLOCK_MAP_PATH.
+
+    It parses only the 'Model uuids' section, and returns a dictionary that maps
+    block names (with and without brackets) to their full block diagram paths.
+
+    Example:
+        "RobotController" -> "[Block Diagram].[RobotController]"
+        "[RobotController]" -> "[Block Diagram].[RobotController]"
+
+    Returns:
+        dict: {block_name: full_path}
+    """
+    if not controller_path or not os.path.isfile(controller_path):
+        raise FileNotFoundError(f"BLOCK_MAP_PATH not found or invalid: {controller_path}")
+
+    block_path_dict = {}
+    in_model_section = False
+
+    with open(controller_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+
+            # Start capturing from the "Model uuids" section
+            if line.startswith("//Model uuids"):
+                in_model_section = True
+                continue
+            elif line.startswith("//Port uuids"):  # stop when Port uuids start
+                break
+
+            if in_model_section:
+                # Match = [Block Diagram].[xxx].[yyy] ;
+                match = re.search(r'=\s*(\[[^\]]+\](?:\.\[[^\]]+\])*)\s*;', line)
+                if match:
+                    full_path = match.group(1)
+                    block_name = full_path.split('.')[-1].strip('[]')
+                    block_path_dict[block_name] = full_path
+                    block_path_dict[f'[{block_name}]'] = full_path  # for names with brackets
+
+    return block_path_dict
+
+
+def get_block_path(block_name: str, block_map: dict) -> str:
+    """
+    Get the full block path from a given block name.
+
+    Args:
+        block_name (str): The name of the block, with or without brackets.
+        block_map (dict): A dictionary returned by `load_block_map`.
+
+    Returns:
+        str: The full block path, or "Not Found" if it does not exist.
+    """
+    return block_map.get(block_name.strip(), "Not Found")

@@ -23,37 +23,46 @@ def show_virtuos_server():
 
     def show_kanal_paths():
         kanal_paths_container.clear()
-        for kanal_name, path_input in kanal_inputs.items():
-            with kanal_paths_container:
-                with ui.row().classes('items-center'):
-                    ui.label(f"{kanal_name}:").style("font-weight: bold; width: 120px")
-                    ui.label(path_input.value).style("color: #555;")
-
-    kanal_paths_container = ui.element('div')
+        with kanal_paths_container:
+            for kanal_name, path_input in kanal_inputs.items():
+                ui.label(f"{kanal_name}: → {path_input.value}").style("color: #333; padding: 2px 0")
+                
+    kanal_paths_container = ui.column().style("margin-top: 10px")
 
     log_area = ui.textarea("Log Output").props('readonly').style('width: 100%; height: 200px')
     listener_status_label = ui.label("Listener : Stopped").style('color: red; font-weight: bold;')
 
+
+
     with ui.expansion("Block → Kanal Mapping", icon='link').style("width: 100%; max-width: 600px"):
-        #ui.label("Block → Kanal Mapping").style("font-weight: bold")
         kanal_count = 1
         kanal_inputs.clear()
+        kanal_inputs_list = []  # 使用列表存储 (kanal_name_input, path_input)
         kanal_container = ui.element('div')
 
         def update_kanal_inputs():
-            kanal_container.clear()
-            kanal_inputs.clear()
-            for i in range(kanal_count):
+            current_count = len(kanal_inputs_list)
+
+            # 增加输入框
+            for i in range(current_count, kanal_count):
                 with kanal_container:
                     with ui.row():
-                        kanal_name_input = ui.input(f"Kanal Name {i+1}", value=f"Kanal_{i+1}").style("width: 40%")
-                        path_input = ui.input(f"Block Path {i+1}", value=f"[Block Diagram].[RobotController]").style("width: 100%")
-                        def update_kanal_inputs_inner(name_input=kanal_name_input, path_input=path_input):
-                            kanal_inputs[name_input.value] = path_input
-                            show_kanal_paths()
-                        kanal_name_input.on('blur', update_kanal_inputs_inner)
-                        path_input.on('blur', update_kanal_inputs_inner)
-                        kanal_inputs[kanal_name_input.value] = path_input
+                        kanal_name_input = ui.input(f"Kanal Name {i+1}", value=f"Kanal_{i+1}").style("width: 60%")
+                        path_input = ui.input(f"Block Path {i+1}", value="").props("readonly").style("width: 60%")
+                        kanal_inputs_list.append((kanal_name_input, path_input))
+
+            # 删除多余的输入框（从 UI 和列表中都删）
+            if kanal_count < current_count:
+                for i in range(current_count - 1, kanal_count - 1, -1):
+                    kanal_inputs_list[i][0].delete()
+                    kanal_inputs_list[i][1].delete()
+                    kanal_inputs_list.pop(i)
+
+            
+            kanal_inputs.clear()
+            for i, (kanal_name_input, path_input) in enumerate(kanal_inputs_list, start=1):
+                kanal_id = f"Kanal_{i}"
+                kanal_inputs[kanal_id] = path_input
             show_kanal_paths()
 
         def on_kanal_count_change(e):
@@ -61,7 +70,21 @@ def show_virtuos_server():
             kanal_count = int(e.value)
             update_kanal_inputs()
 
+        def get_all_paths():
+            block_map = Virtuos_tool.load_block_map()
+            for kanal_name_input, path_input in kanal_inputs_list:
+                block_name = kanal_name_input.value.strip()
+                full_path = Virtuos_tool.get_block_path(block_name, block_map)
+                if full_path == "Not Found":
+                    path_input.props("color=red")
+                    path_input.value = "Not Found"
+                else:
+                    path_input.props("color=primary")
+                    path_input.value = full_path
+            show_kanal_paths()
+
         ui.number("Number of Kanals", value=1, min=1, max=10, step=1, on_change=on_kanal_count_change).style("width: 50%")
+        ui.button("GET ALL PATHS", on_click=get_all_paths).props("color=primary").style("margin-top: 8px")
         update_kanal_inputs()
 
     async def append_log(text):
@@ -119,6 +142,7 @@ def show_virtuos_server():
                         await append_log("[ERROR] No open project and failed to load.")
                         return
                 initialized = True
+                
             else:
                 await append_log("[INFO] Already initialized.")
         except Exception as e:
