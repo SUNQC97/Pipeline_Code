@@ -484,4 +484,61 @@ def descale_trafo_values(param_names: list, param_values: list, factor: int = 10
         descaled_values.append(descaled)
     return descaled_values
 
+def parse_axis_xml(sysman, node_path: str, channel_name_map: dict) -> dict:
+    """
+        Parse the XML of an Axis node to extract its name and Kanal information.
+        returns a dict with axis_name, kanal_name, default_channel, and default_index.
+    """
+    try:
+        node = sysman.LookupTreeItem(node_path)
+        xml_data = node.ProduceXml(True)
+        root = ET.fromstring(xml_data)
+
+        item_type = root.findtext("ItemType")
+        axis_name_twincat = root.findtext("ItemName")
+        axis_def = root.find("IsgAxisDef")
+
+        if axis_def is None:
+            return {"error": "No IsgAxisDef block"}
+
+        default_channel = axis_def.findtext("DefaultChannel")
+        default_index = axis_def.findtext("DefaultIndex")
+
+        if item_type != "403":
+            return {"error": "Not a valid Axis node"}
+
+        if not axis_name_twincat or not default_channel or not default_index:
+            return {"error": "Missing required Axis parameters"}
+
+        # 用 channel_name_map 获取实际 Kanal 节点名
+        kanal_name = channel_name_map.get(int(default_channel), f"Channel_{default_channel}")
+
+        return {
+            "axis_name": axis_name_twincat,
+            "kanal_name": kanal_name,
+            "default_channel": int(default_channel),
+            "default_index": int(default_index)
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
     
+def parse_kanal_xml(sysman, node_path: str) -> dict:
+    """
+    Parse the XML of a Kanal node to extract its name and item type.
+    Returns a dict with kanal_name and item_type.
+    """
+    try:
+        node = sysman.LookupTreeItem(node_path)
+        xml_data = node.ProduceXml(True)
+        root = ET.fromstring(xml_data)
+
+        kanal_name = root.findtext("ItemName")
+        item_type = root.findtext("ItemType")
+
+        return {
+            "kanal_name": kanal_name,
+            "item_type": item_type
+        }
+    except Exception as e:
+        return {"error": str(e)}

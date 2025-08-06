@@ -1,6 +1,8 @@
 import os
 import json
 from opcua import Client
+from lib.utils.save_to_file import save_structure_to_file
+
 
 def connect_opcua_client() -> Client:
     OPCUA_URL = f"opc.tcp://{os.getenv('SERVER_IP')}:{os.getenv('SERVER_PORT')}"
@@ -80,3 +82,50 @@ def write_all_configs_to_opcua(client: Client, all_configs: dict):
     except Exception as e:
         print(f"[Fatal Error] Cannot access OPC UA structure: {e}")
 
+def build_kanal_axis_structure(client: Client) -> dict:
+    """
+    Build a structured dict for kanal axis parameters:
+    {
+        "Kanal_1": ["Axis_1", "Axis_2", ...],
+        "Kanal_2": ["Ext_1", "Ext_2", ...]
+    }
+    """
+    kanal_axis_structure = {}
+    try:
+        root = client.get_root_node()
+        objects_node = root.get_child(["0:Objects"])
+        kanal_nodes = [
+            node for node in objects_node.get_children()
+            if "Kanal" in node.get_browse_name().Name
+        ]
+
+        for kanal_node in kanal_nodes:
+            kanal_name = kanal_node.get_browse_name().Name
+
+            try:
+                # get AxisConfigJSON
+                axis_config_node = kanal_node.get_child(["2:AxisConfigJSON"])
+                axis_config_str = axis_config_node.get_value()
+                axis_config = json.loads(axis_config_str)
+
+                axis_names = []
+                for name in axis_config.get("param_names", []):
+                    if name.startswith(("Axis_", "Ext_", "Achse_")):
+                        prefix = name.split(".")[0]
+                        if prefix not in axis_names:
+                            axis_names.append(prefix)
+
+                kanal_axis_structure[kanal_name] = axis_names
+
+            except Exception as e:
+                print(f"[Error] Failed to read AxisConfigJSON for {kanal_name}: {e}")
+                kanal_axis_structure[kanal_name] = []
+
+        
+    except Exception as e:
+        print(f"[Error] Failed to build kanal axis structure: {e}")
+
+    # Save the structure to a file
+    save_structure_to_file(kanal_axis_structure, "kanal_axis_structure.json")        
+
+    return kanal_axis_structure

@@ -7,7 +7,7 @@ from lib.services.twincat_manager import TwinCATManager
 import asyncio
 from lib.services.opcua_tool import ConfigChangeHandler
 from lib.screens import state
-from lib.services.client import read_all_kanal_configs
+from lib.services.client import read_all_kanal_configs, build_kanal_axis_structure
 from opcua import Client
 from lib.services.TwinCAT_interface import collect_paths
 from dotenv import load_dotenv
@@ -131,6 +131,10 @@ def show_twincat_auto_page():
             manager.apply_all_axis_with_matching(available_paths)
 
             append_log("=== [Done] All parameters applied ===")
+
+            ##debugging
+            build_kanal_axis_structure(opc_client)
+            manager.parse_kanal_and_axis(available_paths)
 
         except Exception as e:
             append_log(f"[Error] {e}")

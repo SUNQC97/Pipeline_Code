@@ -3,3 +3,4 @@ python-dotenv
 opcua
 pywin32
 cryptography
+pywebview

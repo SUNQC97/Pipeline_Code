@@ -10,7 +10,8 @@ from lib.services.TwinCAT_interface import (
     load_config, collect_paths, get_export_path, get_import_path,
     add_child_node, write_trafo_lines_to_twincat, write_axis_param_to_twincat,
     write_all_trafo_to_twincat, write_all_axis_param_to_twincat,
-    read_all_trafo_from_twincat, read_all_axis_from_twincat
+    read_all_trafo_from_twincat, read_all_axis_from_twincat, parse_axis_xml,
+    parse_kanal_xml
 )
 from lib.services.client import (
     fetch_axis_json, convert_trafo_lines, write_all_configs_to_opcua,
@@ -19,6 +20,9 @@ from lib.services.client import (
 import lib.services.client as client
 import asyncio
 import pythoncom
+from lib.utils.save_to_file import save_structure_to_file
+from lib.utils.structure_compare import compare_kanal_axis_structures
+
 
 class TwinCATManager:
     def __init__(
@@ -124,7 +128,38 @@ class TwinCATManager:
         except Exception as e:
             return False, f"Error during add: {e}"
 
-    #### OPC UA Client Methods ####
+    def parse_kanal_and_axis(self, available_paths: list[str]) -> dict:
+        grouped = {}
+        channel_name_map = {}
+
+        # 1. 先解析 Kanal 节点，建立映射表 {channel_number: kanal_name}
+        kanal_paths_all = [
+            path for path in available_paths
+            if path.count("^") == 2 and path.split("^")[-1].lower().startswith(("kanal", "channel"))
+        ]
+        for idx, path in enumerate(kanal_paths_all, start=1):
+            result = parse_kanal_xml(self.sysman, path)
+            if "error" in result:
+                self.log(f"[Error] Kanal parse failed for {path}: {result['error']}")
+                continue
+            grouped[result["kanal_name"]] = []
+            channel_name_map[idx] = result["kanal_name"]
+
+
+        # 2. 再解析 Axis 节点，直接放到对应 Kanal
+        axis_paths_all = [
+            p for p in available_paths
+            if p.count("^") == 3 and p.split("^")[-1].lower().startswith(("axis_", "achse_", "ext_"))
+        ]
+        for path in axis_paths_all:
+            result = parse_axis_xml(self.sysman, path, channel_name_map)
+            if "error" in result:
+                self.log(f"[Error] Axis parse failed for {path}: {result['error']}")
+                continue
+            grouped[result["kanal_name"]].append(result["axis_name"])
+
+        save_structure_to_file(grouped, "TwinCAT_Kanal_Axis_Structure.json")
+        return grouped
 
     def connect_client(self):
         if self.opc_client:
@@ -448,3 +483,93 @@ class TwinCATManager:
             self.log(f"[Error] {e}")
             self.log("Failed to apply axis parameters to TwinCAT node.")
             return False
+
+    def create_axis_name(self, kanal_name: str, used_indices: set) -> str:
+        """根据 Kanal 名和已用序号生成唯一的 Axis 名"""
+        # 从 Kanal 名提取编号，例如 Kanal_1 → 1
+        match = re.search(r'(\d+)$', kanal_name)
+        kanal_num = match.group(1) if match else "0"
+
+        # 找到未用的下一个序号
+        index = 1
+        while index in used_indices:
+            index += 1
+
+        # 生成名称，例如 Achse_11
+        return f"Achse_{kanal_num}{index}", index
+
+    def create_missing_kanal_axis_structure(self, available_paths: list[str], compare_result: dict):
+        """
+        Compare kanal and axis structures between OPC UA and TwinCAT.
+        """
+        if not self.sysman:
+            self.log("[Error] TwinCAT project is not initialized.")
+            return False
+
+        created_kanals = []
+        created_axes = []
+
+        kanal_parent_path, axis_parent_path = self.detect_parent_paths(available_paths)
+
+        if not kanal_parent_path or not axis_parent_path:
+            self.log("[Error] Cannot find Kanal or Axis parent path from available_paths.")
+            return False
+
+        # 1. 创建缺失的 Kanal
+        for kanal_name in compare_result.get("missing_kanals", []):
+            ok, msg = self.add_child(kanal_parent_path, kanal_name, "Kanal")
+            self.log(f"[{'OK' if ok else 'Error'}] {msg}")
+            if ok:
+                created_kanals.append(kanal_name)
+
+        # 2. 创建缺失的 Axis（自动命名）
+        for kanal_name, axes in compare_result.get("missing_axes", {}).items():
+            used_indices = set()  # 已用的序号
+            for axis_name in axes:
+                # 自动生成 Axis 名
+                new_axis_name, new_index = self.create_axis_name(kanal_name, used_indices)
+                ok, msg = self.add_child(axis_parent_path, new_axis_name, "Axis")
+                self.log(f"[{'OK' if ok else 'Error'}] {msg}")
+                if ok:
+                    created_axes.append((kanal_name, new_axis_name))
+                    used_indices.add(new_index)
+
+        # 3. 报告多余的 Kanal
+        for kanal_name in compare_result.get("extra_kanals", []):
+            self.log(f"[Error] Extra Kanal in TwinCAT: {kanal_name}")
+
+        # 4. 报告多余的 Axis
+        for kanal_name, axes in compare_result.get("extra_axes", {}).items():
+            for axis_name in axes:
+                self.log(f"[Error] Extra Axis in TwinCAT: {axis_name} in {kanal_name}")
+
+        self.log(f"[Summary] Created {len(created_kanals)} Kanal(s), {len(created_axes)} Axis(es).")
+        return {
+            "created_kanals": created_kanals,
+            "created_axes": created_axes
+        }
+
+    def detect_parent_paths(self, available_paths: list[str]) -> tuple[str, str] | None:
+        kanal_parent_path = None
+        axis_parent_path = None
+        
+        for path in available_paths:
+            parts = path.split("^")
+            if len(parts) == 2:  
+                kanal_parent_path = path
+                break
+    
+        axis_keywords = ("axis_", "achse_", "ext_")
+        for path in available_paths:
+            parts = path.split("^")
+            if len(parts) >= 4 and any(parts[3].lower().startswith(k) for k in axis_keywords):
+                axis_parent_path = "^".join(parts[:3])  
+                break
+
+        if not kanal_parent_path or not axis_parent_path:
+            self.log("[Error] Cannot find Kanal or Axis parent path from available_paths.")
+            return None
+
+        self.log(f"[Info] Detected Kanal parent path: {kanal_parent_path}")
+        self.log(f"[Info] Detected Axis parent path: {axis_parent_path}")
+        return kanal_parent_path, axis_parent_path
