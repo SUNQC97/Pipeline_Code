@@ -666,6 +666,9 @@ def show_twincat_page():
             apply_all_axis_to_twincat_with_matching()
 
             append_log("=== [Done] All parameters applied ===")
+
+
+            
         except Exception as e:
             append_log(f"[Error] {e}")
 

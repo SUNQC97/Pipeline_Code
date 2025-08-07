@@ -1,1 +1,18 @@
-{}
+{
+  "Kanal_2": [
+    "Axis_1",
+    "Axis_2",
+    "Axis_3",
+    "Axis_4",
+    "Axis_5",
+    "Axis_6"
+  ],
+  "Kanal_1": [
+    "Axis_1",
+    "Axis_2",
+    "Axis_3",
+    "Axis_4",
+    "Axis_5",
+    "Axis_6"
+  ]
+}

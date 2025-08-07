@@ -180,7 +180,6 @@ def import_child_node(sysman, parent_path, xml_file_path):
         print(f"Failed to import child node: {e}")
         return False
 
-       
 def write_trafo_lines_to_twincat(sysman, node_path: str, trafo_lines: list):
     if not sysman:
         print("TwinCAT sysman is not initialized.")
@@ -506,6 +505,10 @@ def parse_axis_xml(sysman, node_path: str) -> dict:
         default_channel = axis_def.findtext("DefaultChannel")
         default_index = axis_def.findtext("DefaultIndex")
 
+        default_index = int(default_index) + 1  # Index is zero-based, so we add 1  
+
+        axis_name = f"Axis_{default_index}"  # Axis name in the format "Axis_1", "Axis_2", etc.
+
         if item_type != "403":
             return {"error": "Not a valid Axis node"}
 
@@ -515,7 +518,7 @@ def parse_axis_xml(sysman, node_path: str) -> dict:
         kanal_name = f"Kanal_{default_channel}"
 
         return {
-            "axis_name": axis_name_twincat,
+            "axis_name": axis_name,
             "kanal_name": kanal_name,
             "default_channel": int(default_channel),
             "default_index": int(default_index)
@@ -535,12 +538,15 @@ def parse_kanal_xml(sysman, node_path: str) -> dict:
         xml_data = node.ProduceXml(True)
         root = ET.fromstring(xml_data)
 
-        kanal_name = root.findtext("ItemName")
-        item_type = root.findtext("ItemType")
+        item_id = root.findtext("ItemId")
+        if item_id is None:
+            return {"error": "Missing ItemId"}
+
+        kanal_name = f"Kanal_{item_id}"
 
         return {
             "kanal_name": kanal_name,
-            "item_type": item_type
+            "item_type": root.findtext("ItemType")
         }
     except Exception as e:
         return {"error": str(e)}

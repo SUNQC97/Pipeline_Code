@@ -337,19 +337,33 @@ def change_xml_from_new_axis(xml_data: str, axis_name: str, kanal_name: str) -> 
     except (IndexError, ValueError):
         raise ValueError(f"Invalid axis_name format: {axis_name}")
 
+    default_index_zero_based = axis_index - 1
+
     di_elem = root.find(".//DefaultIndex")
     if di_elem is None:
         raise ValueError("Missing <DefaultIndex> element in XML")
     di_elem.text = str(axis_index-1)    # # Index is zero-based, so we subtract 1
 
-    # 6. inject CDATA content into <AchsMds>
+    # 6. generate and wirte DefaultProgName
+    prog_letters = ["X", "Y", "Z", "A", "B", "C"]
+    if default_index_zero_based < len(prog_letters):
+        progname = f"{prog_letters[default_index_zero_based]}{kanal_num}"
+    else:
+        progname = f"U{default_index_zero_based}_{kanal_num}"  # fallback
+
+    dp_elem = root.find(".//DefaultProgName")
+    if dp_elem is None:
+        raise ValueError("Missing <DefaultProgName> element in XML")
+    dp_elem.text = progname
+
+    # 7. inject CDATA content into <AchsMds>
     achs_elem = root.find(".//AchsMds")
     if achs_elem is None:
         raise ValueError("Missing <AchsMds> element in XML")
 
     achs_elem.text = f"<![CDATA[{content}]]>"
 
-    # 7. return XML string
+    # 8. return XML string
     xml_string = ET.tostring(root, encoding="unicode")
     xml_string = xml_string.replace("&lt;![CDATA[", "<![CDATA[").replace("]]&gt;", "]]>")
 

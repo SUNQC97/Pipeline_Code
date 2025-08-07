@@ -146,15 +146,16 @@ class TwinCATManager:
         # Step 2: 找到所有 Axis 节点，提取 XML 中的 DefaultKanal 和 DefaultIndex
         axis_paths_all = [
             path for path in available_paths
-            if path.count("^") == 3 and path.split("^")[-1].lower().startswith(("axis_", "achse_", "ext_"))
+            if path.count("^") == 3 and any(key in path.split("^")[-1].lower() for key in ("axis", "achse", "ext"))
         ]
         for path in axis_paths_all:
+            print(f"Parsing Axis XML: {path}")
             result = parse_axis_xml(self.sysman, path)
             if "error" in result:
                 self.log(f"[Error] Axis parse failed for {path}: {result['error']}")
                 continue
 
-            kanal_name = result.get("default_kanal")
+            kanal_name = result.get("kanal_name")
             if not kanal_name:
                 self.log(f"[Warning] Axis {path} has no DefaultKanal.")
                 continue
@@ -164,14 +165,15 @@ class TwinCATManager:
 
             index = result.get("default_index", 999)  # DefaultIndex 可用于排序
             grouped[kanal_name].append((index, result["axis_name"]))
-
+            print(f"Added Axis {result['axis_name']} to Kanal {kanal_name} with index {index}")
+        
         # Step 3: 对每个 Kanal 下的 Axis 按 index 排序，仅保留 axis_name
         for kanal in grouped:
-            grouped[kanal] = [name for _, name in sorted(grouped[kanal], key=lambda x: x[0])]
+            axis_sorted = [name for _, name in sorted(grouped[kanal], key=lambda x: x[0])]
+            grouped[kanal] = list(dict.fromkeys(axis_sorted))  # 保留顺序的去重方法
 
         save_structure_to_file(grouped, "TwinCAT_Kanal_Axis_Structure.json")
         return grouped
-
 
     def connect_client(self):
         if self.opc_client:
@@ -496,19 +498,23 @@ class TwinCATManager:
             self.log("Failed to apply axis parameters to TwinCAT node.")
             return False
 
-    def create_axis_name(self, kanal_name: str, used_indices: set) -> str:
+    def create_axis_name(self, kanal_name: str, axis_name: str, used_indices: set) -> str:
         """根据 Kanal 名和已用序号生成唯一的 Axis 名"""
-        # 从 Kanal 名提取编号，例如 Kanal_1 → 1
-        match = re.search(r'(\d+)$', kanal_name)
-        kanal_num = match.group(1) if match else "0"
+        # 从 Kanal 名中提取编号，例如 Kanal_1 → 1
+        kanal_match = re.search(r'(\d+)$', kanal_name)
+        kanal_num = kanal_match.group(1) if kanal_match else "0"
 
-        # 找到未用的下一个序号
-        index = 1
+        # 从 axis_name 中提取下划线后的数字，例如 Axis_6 → 6
+        axis_match = re.search(r'_(\d+)$', axis_name)
+        index = int(axis_match.group(1)) if axis_match else 1  # fallback to 1 if not found
+
+        # 确保该 index 没有被用过
         while index in used_indices:
             index += 1
 
-        # 生成名称，例如 Achse_11
-        return f"Achse_{kanal_num}{index}", index
+        # 构造 Achse 名
+        new_axis_name = f"Achse_{kanal_num}{index}"
+        return new_axis_name, index
 
     def create_missing_kanal_axis_structure(self, available_paths: list[str], compare_result: dict):
         """
@@ -542,7 +548,7 @@ class TwinCATManager:
             used_indices = set()  # used indices
             for axis_name in axes:
                 # auto-generate Axis name
-                new_axis_name, new_index = self.create_axis_name(kanal_name, used_indices)
+                new_axis_name, new_index = self.create_axis_name(kanal_name, axis_name, used_indices)
                 ok, msg = self.add_child(axis_parent_path, new_axis_name, "Axis")
                 self.log(f"[{'OK' if ok else 'Error'}] {msg}")
                 if ok:

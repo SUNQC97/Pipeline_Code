@@ -1,4 +1,4 @@
-<TreeItem><ItemName>Achse_24</ItemName><PathName>TICC^CNC^Axes^Achse_24</PathName><ItemType>403</ItemType><ItemId>10</ItemId><ObjectId>#x055100a0</ObjectId><ItemSubType>4</ItemSubType><ChildCount>0</ChildCount><Disabled>false</Disabled><CreateSymbols>false</CreateSymbols><TreeImageId>171</TreeImageId><IsgAxisDef><DriveType>4</DriveType><Spindle>false</Spindle><DefaultChannel>2</DefaultChannel><DefaultIndex>4</DefaultIndex><DefaultProgName>Y3</DefaultProgName><FeedAxis>false</FeedAxis><Inputs /><Outputs /><AchsMds><![CDATA[# ****************************************
+<TreeItem><ItemName>Achse_24</ItemName><PathName>TICC^CNC^Axes^Achse_24</PathName><ItemType>403</ItemType><ItemId>10</ItemId><ObjectId>#x055100a0</ObjectId><ItemSubType>4</ItemSubType><ChildCount>0</ChildCount><Disabled>false</Disabled><CreateSymbols>false</CreateSymbols><TreeImageId>171</TreeImageId><IsgAxisDef><DriveType>4</DriveType><Spindle>false</Spindle><DefaultChannel>2</DefaultChannel><DefaultIndex>3</DefaultIndex><DefaultProgName>A2</DefaultProgName><FeedAxis>false</FeedAxis><Inputs /><Outputs /><AchsMds><![CDATA[# ****************************************
 #
 #TC_AXIS_DESC:    Axis Parameter
 #
