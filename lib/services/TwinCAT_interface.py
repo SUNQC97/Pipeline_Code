@@ -13,10 +13,12 @@ from lib.utils.xml_read_write import (
     axis_param_change_with_matching,
     read_trafo_lines_from_xml,
     clean_and_insert_trafo_lines,
-    read_axis_param_from_xml_with_matching
+    read_axis_param_from_xml_with_matching,
+    change_xml_from_new_kanal,
+    change_xml_from_new_axis
 )
 from lib.services.client import convert_trafo_lines, convert_axis_lines, fetch_axis_json, fetch_trafo_json, read_all_kanal_configs
-
+from lib.utils.save_to_file import save_kanal_xml_to_file
 
 def load_config():
     dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
@@ -524,6 +526,7 @@ def parse_axis_xml(sysman, node_path: str, channel_name_map: dict) -> dict:
         return {"error": str(e)}
     
 def parse_kanal_xml(sysman, node_path: str) -> dict:
+
     """
     Parse the XML of a Kanal node to extract its name and item type.
     Returns a dict with kanal_name and item_type.
@@ -542,3 +545,62 @@ def parse_kanal_xml(sysman, node_path: str) -> dict:
         }
     except Exception as e:
         return {"error": str(e)}
+    
+def write_xml_to_new_kanal(sysman, node_path: str, kanal_name: str):
+    """
+    Write new Kanal XML data to the XML file.
+    """
+    try:
+        node = sysman.LookupTreeItem(node_path)
+        xml_data = node.ProduceXml(True)
+        root = ET.fromstring(xml_data)
+
+        if kanal_name != root.findtext("ItemName"):
+            print(f"Kanal name mismatch: expected {kanal_name}")
+            return
+        
+        item_type = root.findtext("ItemType")
+
+        if item_type != "401":
+            print(f"Node {node_path} is not a valid Kanal node.")
+            return
+
+        modified_xml = change_xml_from_new_kanal(xml_data, kanal_name)
+        update_node_with_xml(node, modified_xml)
+
+
+        save_kanal_xml_to_file(modified_xml, kanal_name)
+        print(f"New Kanal XML written successfully for {kanal_name}")
+
+    except Exception as e:
+        print(f"Error writing new Kanal XML: {e}")
+
+
+def write_xml_to_new_axis(sysman, node_path: str):
+    """
+    Write new Axis XML data to the XML file.
+    """
+    try:
+        node = sysman.LookupTreeItem(node_path)
+        xml_data = node.ProduceXml(True)
+        root = ET.fromstring(xml_data)
+
+        axis_name = root.findtext("ItemName")
+        item_type = root.findtext("ItemType")
+
+        # 这里需要实现具体的写入逻辑
+        new_axis_xml = ET.Element("Axis")
+        ET.SubElement(new_axis_xml, "ItemName").text = axis_name
+        ET.SubElement(new_axis_xml, "ItemType").text = item_type
+
+        # 将新 XML 写入文件
+        tree = ET.ElementTree(new_axis_xml)
+        tree.write(f"new_{axis_name}.xml", encoding="utf-8", xml_declaration=True)
+
+    except Exception as e:
+        print(f"Error writing new Axis XML: {e}")
+    """
+    Write new Axis XML data to the XML file.
+    """
+    # 这里需要实现具体的写入逻辑
+    pass

@@ -1,6 +1,7 @@
 import os
 import xml.etree.ElementTree as ET
 import re
+from dotenv import load_dotenv
 
 FIELD_MAPPING = {
     "v_max": ("getriebe[0].dynamik.vb_max", lambda v: str(int(float(v) * 1000)), lambda v: str(float(v) / 1000)),
@@ -9,8 +10,6 @@ FIELD_MAPPING = {
     "s_max": ("kenngr.swe_pos", lambda v: str(int(float(v) * 10000)), lambda v: str(float(v) / 10000)),
     "s_init": ("antr.abs_pos_offset", lambda v: str(int(float(v) * 10000)), lambda v: str(float(v) / 10000)),
 }
-
-
 
 
 def clean_and_insert_trafo_lines(xml_data, new_trafo_lines):
@@ -234,3 +233,66 @@ def read_axis_param_from_xml_with_matching(filtered_names: list[str], filtered_v
 
     return param_names, param_values
 
+def change_xml_from_new_kanal(xml_data) -> str: 
+    """
+    Write new Kanal XML data to the XML file.
+    """
+    dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
+    load_dotenv(dotenv_path) 
+    lis_base_path = os.getenv("LIS_BASE_PATH")
+    default_lis_filenames = {
+        "SdaMds": "sda_mds1.lis",
+        "NullpD": "nullp_d1.lis",
+        "WerkzD": "werkz_d1.lis",
+        "PzvD":   "pzv_d1.lis",
+        "VeD":    "ext_var1.lis",
+    }
+
+    lis_files = {
+        field: os.path.join(lis_base_path, filename)
+        for field, filename in default_lis_filenames.items()
+    }
+
+    # 3. 解析原始 XML
+    if not xml_data:
+        raise ValueError("XML data is empty.")
+    
+    try:
+        root = ET.fromstring(xml_data)
+    except ET.ParseError as e:
+        raise ValueError(f"Invalid XML data: {e}")
+
+    # 4. 遍历每个字段，插入对应 .lis 内容
+    for field, file_path in lis_files.items():
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Missing .lis file for {field}: {file_path}")
+        
+        content = safe_read_file(file_path)
+        
+        elem = root.find(f".//{field}")
+        if elem is None:
+            raise ValueError(f"Missing XML element <{field}>")
+        
+        elem.text = f"<![CDATA[{content}]]>"
+
+    # 5. 输出完整 XML 字符串（修复 CDATA 转义）
+    xml_string = ET.tostring(root, encoding="unicode")
+    xml_string = xml_string.replace("&lt;![CDATA[", "<![CDATA[").replace("]]&gt;", "]]>")
+    
+    return xml_string
+
+def safe_read_file(file_path: str) -> str:
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except UnicodeDecodeError:
+        with open(file_path, "r", encoding="latin1") as f:   
+            return f.read()
+
+
+def change_xml_from_new_axis(xml_data: str, ) -> str:
+    """
+    Write new Axis XML data to the XML file.
+    """
+    # 这里需要实现具体的写入逻辑
+    pass

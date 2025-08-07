@@ -11,7 +11,7 @@ from lib.services.TwinCAT_interface import (
     add_child_node, write_trafo_lines_to_twincat, write_axis_param_to_twincat,
     write_all_trafo_to_twincat, write_all_axis_param_to_twincat,
     read_all_trafo_from_twincat, read_all_axis_from_twincat, parse_axis_xml,
-    parse_kanal_xml
+    parse_kanal_xml, write_xml_to_new_kanal, write_xml_to_new_axis
 )
 from lib.services.client import (
     fetch_axis_json, convert_trafo_lines, write_all_configs_to_opcua,
@@ -509,16 +509,7 @@ class TwinCATManager:
         created_kanals = []
         created_axes = []
 
-        print(f"[Info] Available paths: {available_paths}")
-
         parent_paths = self.detect_parent_paths(available_paths)
-        print(f"[Info] Detected parent paths: {parent_paths}")
-
-
-        if not parent_paths:
-            self.log("[Error] Cannot find Kanal or Axis parent path from available_paths.")
-            return False
-
         kanal_parent_path, axis_parent_path = parent_paths
 
         if not kanal_parent_path or not axis_parent_path:
@@ -529,8 +520,10 @@ class TwinCATManager:
         for kanal_name in compare_result.get("missing_kanals", []):
             ok, msg = self.add_child(kanal_parent_path, kanal_name, "Kanal")
             self.log(f"[{'OK' if ok else 'Error'}] {msg}")
-            if ok:
+            if ok:    
                 created_kanals.append(kanal_name)
+                node_path = f"{kanal_parent_path}^{kanal_name}"
+                write_xml_to_new_kanal(self.sysman, node_path)
 
         # 2. 创建缺失的 Axis（自动命名）
         for kanal_name, axes in compare_result.get("missing_axes", {}).items():
