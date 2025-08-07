@@ -47,7 +47,8 @@ def show_virtuos_server():
             for i in range(current_count, kanal_count):
                 with kanal_container:
                     with ui.row():
-                        kanal_name_input = ui.input(f"Kanal Name {i+1}", value=f"Kanal_{i+1}").style("width: 60%")
+                        #kanal_name_input = ui.input(f"Kanal Name {i+1}", value=f"Kanal_{i+1}").style("width: 60%")
+                        kanal_name_input = ui.input(f"Kanal Name {i+1}", value=f"RobotController").style("width: 60%")
                         path_input = ui.input(f"Block Path {i+1}", value="").props("readonly").style("width: 60%")
                         kanal_inputs_list.append((kanal_name_input, path_input))
 

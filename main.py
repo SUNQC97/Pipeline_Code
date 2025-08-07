@@ -29,4 +29,4 @@ with ui.tab_panels(tabs, value=virtuos_tab).classes('w-full'):
     with ui.tab_panel(twincat_tab_create_auto):
         show_twincat_create_auto_page()
 
-ui.run(native=False)
+ui.run(native=True)

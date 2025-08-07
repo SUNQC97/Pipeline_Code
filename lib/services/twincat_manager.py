@@ -509,7 +509,17 @@ class TwinCATManager:
         created_kanals = []
         created_axes = []
 
-        kanal_parent_path, axis_parent_path = self.detect_parent_paths(available_paths)
+        print(f"[Info] Available paths: {available_paths}")
+
+        parent_paths = self.detect_parent_paths(available_paths)
+        print(f"[Info] Detected parent paths: {parent_paths}")
+
+
+        if not parent_paths:
+            self.log("[Error] Cannot find Kanal or Axis parent path from available_paths.")
+            return False
+
+        kanal_parent_path, axis_parent_path = parent_paths
 
         if not kanal_parent_path or not axis_parent_path:
             self.log("[Error] Cannot find Kanal or Axis parent path from available_paths.")
@@ -544,7 +554,7 @@ class TwinCATManager:
                 self.log(f"[Error] Extra Axis in TwinCAT: {axis_name} in {kanal_name}")
 
         self.log(f"[Summary] Created {len(created_kanals)} Kanal(s), {len(created_axes)} Axis(es).")
-        return {
+        return { 
             "created_kanals": created_kanals,
             "created_axes": created_axes
         }
@@ -553,22 +563,22 @@ class TwinCATManager:
         kanal_parent_path = None
         axis_parent_path = None
         
+        print("calling detect_parent_paths")
+        print("available_paths:", available_paths)
+
         for path in available_paths:
-            parts = path.split("^")
-            if len(parts) == 2:  
+            if path.count("^") == 1 and path.split("^")[-1].lower().startswith(("cnc","nc")):
                 kanal_parent_path = path
                 break
-    
-        axis_keywords = ("axis_", "achse_", "ext_")
-        for path in available_paths:
-            parts = path.split("^")
-            if len(parts) >= 4 and any(parts[3].lower().startswith(k) for k in axis_keywords):
-                axis_parent_path = "^".join(parts[:3])  
+
+        for path in available_paths:    
+            if path.count("^") == 2 and path.split("^")[-1].lower().startswith(("axis", "achse", "axes", "achsen")):
+                axis_parent_path = path
                 break
 
-        if not kanal_parent_path or not axis_parent_path:
-            self.log("[Error] Cannot find Kanal or Axis parent path from available_paths.")
-            return None
+        print(f"[Info] Detected Kanal parent path: {kanal_parent_path}")
+        print(f"[Info] Detected Axis parent path: {axis_parent_path}")
+
 
         self.log(f"[Info] Detected Kanal parent path: {kanal_parent_path}")
         self.log(f"[Info] Detected Axis parent path: {axis_parent_path}")
