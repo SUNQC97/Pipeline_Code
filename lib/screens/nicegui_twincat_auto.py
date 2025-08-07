@@ -132,10 +132,6 @@ def show_twincat_auto_page():
 
             append_log("=== [Done] All parameters applied ===")
 
-            ##debugging
-            build_kanal_axis_structure(opc_client)
-            manager.parse_kanal_and_axis(available_paths)
-
         except Exception as e:
             append_log(f"[Error] {e}")
             
@@ -162,8 +158,11 @@ def show_twincat_auto_page():
 
         try:
             if not state.sysman:
-                append_log("Please initialize the TwinCAT project first.")
-                return
+                init_sysman()
+                if not state.sysman:
+                    append_log("Failed to initialize TwinCAT project.")
+                    return
+                
 
             if not opc_client:
                 manager.connect_client()
@@ -200,6 +199,9 @@ def show_twincat_auto_page():
     async def start_opcua_client_listener():
         nonlocal opc_client, opc_subscription_started
         loop = asyncio.get_running_loop()
+        
+        init_sysman()
+
 
         if opc_subscription_started:
             append_log("[INFO] Listener already started.")
@@ -247,6 +249,7 @@ def show_twincat_auto_page():
 
     # Only auto/one-click operations
     ui.label("TwinCAT Auto Operations").style("font-weight: bold; font-size: 20px;")
+    ui.button("Initialize TwinCAT Project", on_click=init_sysman).style("width: 100%")
     ui.button("One-click CNC Init + Write", on_click=one_click_full_apply, color='primary').props('raised')
     ui.button("One-click Read", on_click=one_click_full_read, color='primary').props('raised')
     ui.button("Start OPC UA Listener", on_click=start_opcua_client_listener, color='purple')

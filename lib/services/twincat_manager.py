@@ -51,6 +51,9 @@ class TwinCATManager:
 
     def log(self, message):
         self.logger(message)
+    
+    def set_log_function(self, func):
+        self.log = func
 
     def load_axis_mapping(self):
         mapping_path = Path(__file__).parent.parent / "config" / "Kanal_Axis_mapping.json"

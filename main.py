@@ -1,9 +1,11 @@
 from nicegui import ui
+
 #from lib.screens.nicegui_twincat_manual_test import show_twincat_manual_page
 from lib.screens.nicegui_virtuos_opcua import show_virtuos_server
 from lib.screens.nicegui_twincat_manual import show_twincat_page
 from lib.screens.nicegui_twincat_auto import show_twincat_auto_page
 from lib.screens.nicegui_twincat_create_auto import show_twincat_create_auto_page
+
 
 with ui.tabs().classes('w-full') as tabs:
 
