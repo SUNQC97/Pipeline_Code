@@ -128,38 +128,50 @@ class TwinCATManager:
         except Exception as e:
             return False, f"Error during add: {e}"
 
-    def parse_kanal_and_axis(self, available_paths: list[str]) -> dict:
+    def parse_kanal_and_axis_by_xml(self, available_paths: list[str]) -> dict:
         grouped = {}
-        channel_name_map = {}
-
-        # 1. 先解析 Kanal 节点，建立映射表 {channel_number: kanal_name}
+        
+        # Step 1: 找到所有 Kanal 节点
         kanal_paths_all = [
             path for path in available_paths
             if path.count("^") == 2 and path.split("^")[-1].lower().startswith(("kanal", "channel"))
         ]
-        for idx, path in enumerate(kanal_paths_all, start=1):
+        for path in kanal_paths_all:
             result = parse_kanal_xml(self.sysman, path)
             if "error" in result:
                 self.log(f"[Error] Kanal parse failed for {path}: {result['error']}")
                 continue
             grouped[result["kanal_name"]] = []
-            channel_name_map[idx] = result["kanal_name"]
 
-
-        # 2. 再解析 Axis 节点，直接放到对应 Kanal
+        # Step 2: 找到所有 Axis 节点，提取 XML 中的 DefaultKanal 和 DefaultIndex
         axis_paths_all = [
-            p for p in available_paths
-            if p.count("^") == 3 and p.split("^")[-1].lower().startswith(("axis_", "achse_", "ext_"))
+            path for path in available_paths
+            if path.count("^") == 3 and path.split("^")[-1].lower().startswith(("axis_", "achse_", "ext_"))
         ]
         for path in axis_paths_all:
-            result = parse_axis_xml(self.sysman, path, channel_name_map)
+            result = parse_axis_xml(self.sysman, path)
             if "error" in result:
                 self.log(f"[Error] Axis parse failed for {path}: {result['error']}")
                 continue
-            grouped[result["kanal_name"]].append(result["axis_name"])
+
+            kanal_name = result.get("default_kanal")
+            if not kanal_name:
+                self.log(f"[Warning] Axis {path} has no DefaultKanal.")
+                continue
+
+            if kanal_name not in grouped:
+                grouped[kanal_name] = []
+
+            index = result.get("default_index", 999)  # DefaultIndex 可用于排序
+            grouped[kanal_name].append((index, result["axis_name"]))
+
+        # Step 3: 对每个 Kanal 下的 Axis 按 index 排序，仅保留 axis_name
+        for kanal in grouped:
+            grouped[kanal] = [name for _, name in sorted(grouped[kanal], key=lambda x: x[0])]
 
         save_structure_to_file(grouped, "TwinCAT_Kanal_Axis_Structure.json")
         return grouped
+
 
     def connect_client(self):
         if self.opc_client:
@@ -516,32 +528,35 @@ class TwinCATManager:
             self.log("[Error] Cannot find Kanal or Axis parent path from available_paths.")
             return False
 
-        # 1. 创建缺失的 Kanal
+        # 1. create the missing Kanal
         for kanal_name in compare_result.get("missing_kanals", []):
             ok, msg = self.add_child(kanal_parent_path, kanal_name, "Kanal")
             self.log(f"[{'OK' if ok else 'Error'}] {msg}")
             if ok:    
                 created_kanals.append(kanal_name)
                 node_path = f"{kanal_parent_path}^{kanal_name}"
-                write_xml_to_new_kanal(self.sysman, node_path)
+                write_xml_to_new_kanal(self.sysman, node_path, kanal_name)
 
-        # 2. 创建缺失的 Axis（自动命名）
+        # 2. create the missing Axis (auto-naming)
         for kanal_name, axes in compare_result.get("missing_axes", {}).items():
-            used_indices = set()  # 已用的序号
+            used_indices = set()  # used indices
             for axis_name in axes:
-                # 自动生成 Axis 名
+                # auto-generate Axis name
                 new_axis_name, new_index = self.create_axis_name(kanal_name, used_indices)
                 ok, msg = self.add_child(axis_parent_path, new_axis_name, "Axis")
                 self.log(f"[{'OK' if ok else 'Error'}] {msg}")
                 if ok:
                     created_axes.append((kanal_name, new_axis_name))
                     used_indices.add(new_index)
+                    node_path = f"{axis_parent_path}^{new_axis_name}"
+                    # write XML to new Axis
+                    write_xml_to_new_axis(self.sysman, node_path, new_axis_name,axis_name, kanal_name)
 
-        # 3. 报告多余的 Kanal
+        # 3. report extra Kanal
         for kanal_name in compare_result.get("extra_kanals", []):
             self.log(f"[Error] Extra Kanal in TwinCAT: {kanal_name}")
 
-        # 4. 报告多余的 Axis
+        # 4. report extra Axis
         for kanal_name, axes in compare_result.get("extra_axes", {}).items():
             for axis_name in axes:
                 self.log(f"[Error] Extra Axis in TwinCAT: {axis_name} in {kanal_name}")
@@ -555,9 +570,6 @@ class TwinCATManager:
     def detect_parent_paths(self, available_paths: list[str]) -> tuple[str, str] | None:
         kanal_parent_path = None
         axis_parent_path = None
-        
-        print("calling detect_parent_paths")
-        print("available_paths:", available_paths)
 
         for path in available_paths:
             if path.count("^") == 1 and path.split("^")[-1].lower().startswith(("cnc","nc")):
@@ -568,10 +580,6 @@ class TwinCATManager:
             if path.count("^") == 2 and path.split("^")[-1].lower().startswith(("axis", "achse", "axes", "achsen")):
                 axis_parent_path = path
                 break
-
-        print(f"[Info] Detected Kanal parent path: {kanal_parent_path}")
-        print(f"[Info] Detected Axis parent path: {axis_parent_path}")
-
 
         self.log(f"[Info] Detected Kanal parent path: {kanal_parent_path}")
         self.log(f"[Info] Detected Axis parent path: {axis_parent_path}")

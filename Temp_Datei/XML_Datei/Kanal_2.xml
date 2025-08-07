@@ -1,0 +1,526 @@
+<TreeItem><ItemName>Kanal_2</ItemName><PathName>TICC^CNC^Kanal_2</PathName><ItemType>401</ItemType><ItemId>2</ItemId><ObjectId>#x05520020</ObjectId><ChildCount>0</ChildCount><Disabled>false</Disabled><TreeImageId>169</TreeImageId><IsgChannelDef><SdaMds><![CDATA[# ****************************************
+#
+#TC_CHANNEL_DESC_1: Channel parameter
+#
+# ****************************************
+# Spindle data
+# ==================================
+spdl_anzahl                                            0             ( P-CHAN-00082 : Entire number of spindles related to the channel
+#
+#cax_face_id                                           1             ( P-CHAN-00008 : Machine type for facing
+#default_ax_name_of_spindle                            C1            ( P-CHAN-00010 : Name of the spindle axis within a path compound 
+#
+main_spindle_ax_nr                                     0             ( P-CHAN-00051 : Logical axis number of the main spindle after startup
+main_spindle_name                                      S             ( P-CHAN-00053 : Name of the main spindle after startup
+main_spindle_gear_change                               0             ( P-CHAN-00052 : Enabling of mechanical gear change for main spindle (0: off)
+spindle_m_fct_free                                     0             ( P-CHAN-00098 : Switching of the meaning of M functions M3/M4/M5/M19
+#
+spindel[0].bezeichnung                                 S1            ( P-CHAN-00007 : Default and alternative spindle name 
+spindel[0].log_achs_nr                                 0             ( P-CHAN-00036 : Logical axis number of the spindle
+spindel[0].plc_control                                 0             ( P-CHAN-00069 : Spindle is PLC controlled (0: off)
+spindel[0].s_synch                          PLC_INFO | MOS           ( P-CHAN-00081 : output and synchronisation for S command
+spindel[0].m3_synch                         PLC_INFO | MVS_SVS       ( P-CHAN-00045 : output and synchronisation for M3
+spindel[0].m4_synch                         PLC_INFO | MVS_SVS       ( P-CHAN-00047 : output and synchronisation for M4 
+spindel[0].m5_synch                         PLC_INFO | MVS_SVS       ( P-CHAN-00049 : output and synchronisation for M5  
+spindel[0].m19_synch                                   MNS_SNS       ( P-CHAN-00043 : output and synchronisation for M19  
+spindel[0].s_prozess_zeit                              0             ( P-CHAN-00080 : [0.1us] Process time of S command (for simulation)
+spindel[0].m3_prozess_zeit                             0             ( P-CHAN-00044 : [0.1us] Process time of M3 (for simulation)
+spindel[0].m4_prozess_zeit                             0             ( P-CHAN-00046 : [0.1us] Process time of M4 (for simulation)
+spindel[0].m5_prozess_zeit                             0             ( P-CHAN-00048 : [0.1us] Process time of M5 (for simulation)
+spindel[0].m19_prozess_zeit                            0             ( P-CHAN-00042 : [0.1us] Process time of M19 (for simulation)
+#
+# Settings for spindle gears
+# ==================================
+#spindel[0].range_way                                  0             ( P-CHAN-00074 : Direction of range selection (0:bottom up, 1:top down)
+#spindel[0].autom_range                                1             ( P-CHAN-00004 : Automatic range selection by NC control (0: off, 1: on)
+#
+#spindel[0].range_table[0].min_speed                   0             ( P-CHAN-00058 : Minimum spindle speed of range 0 (M40)
+#spindel[0].range_table[0].max_speed                   560           ( P-CHAN-00055 : Maximum spindle speed of range 0 (M40)
+#spindel[0].range_table[1].min_speed                   400           ( P-CHAN-00058 : Minimum spindle speed of range 1 (M41)
+#spindel[0].range_table[1].max_speed                   800           ( P-CHAN-00055 : Maximum spindle speed of range 1 (M41)
+#spindel[0].range_table[2].min_speed                   700           ( P-CHAN-00058 : Minimum spindle speed of range 2 (M42)
+#spindel[0].range_table[2].max_speed                   3360          ( P-CHAN-00055 : Maximum spindle speed of range 2 (M42)
+#spindel[0].range_table[3].min_speed                   3361          ( P-CHAN-00058 : Minimum spindle speed of range 3 (M43)
+#spindel[0].range_table[3].max_speed                   4000          ( P-CHAN-00055 : Maximum spindle speed of range 3 (M43)
+#spindel[0].range_table[4].min_speed                   0             ( P-CHAN-00058 : Minimum spindle speed of range 4 (M44, here not used)
+#spindel[0].range_table[4].max_speed                   0             ( P-CHAN-00055 : Maximum spindle speed of range 4 (M44, here not used)
+#spindel[0].range_table[5].min_speed                   0             ( P-CHAN-00058 : Minimum spindle speed of range 5 (M45, here not used)
+#spindel[0].range_table[5].max_speed                   0             ( P-CHAN-00055 : Maximum spindle speed of range 5 (M45, here not used)
+#
+#
+# Definition of default axes group
+# ==================================
+grp_anzahl                                            1             ( P-CHAN-00023 : Number of axes groups (always 1)
+#feed_to_weakest_axis                                  1             ( P-CHAN-00096 : Switching the default feed axis (1: Weakest axis is default feed axis)  
+#
+gruppe[0].bezeichnung                                 IPO_1         ( P-CHAN-00005 : Name of the axes group
+gruppe[0].achs_anzahl                                 5             ( P-CHAN-00003 : Number of axes in axes group
+#
+gruppe[0].achse[0].log_achs_nr                        1             ( P-CHAN-00035 : Logical axis number of the first (main) axis
+gruppe[0].achse[0].bezeichnung                        X             ( P-CHAN-00006 : Name of the first (main) axis
+#
+gruppe[0].achse[1].log_achs_nr                        2             ( P-CHAN-00035 : Logical axis number of the second (main) axis
+gruppe[0].achse[1].bezeichnung                        Y             ( P-CHAN-00006 : Name of the second (main) axis
+#
+gruppe[0].achse[2].log_achs_nr                        3             ( P-CHAN-00035 : Logical axis number of the third (main) axis
+gruppe[0].achse[2].bezeichnung                        Z             ( P-CHAN-00006 : Name of the third (main) axis
+#
+gruppe[0].achse[3].log_achs_nr                        4             ( P-CHAN-00035 : Logical axis number of the fourth (tracking) axis
+gruppe[0].achse[3].bezeichnung                        C             ( P-CHAN-00006 : Name of the fourth (tracking) axis
+#
+gruppe[0].achse[4].log_achs_nr                        5             ( P-CHAN-00035 : Logical axis number of the fifth (tracking) axis
+gruppe[0].achse[4].bezeichnung                        A             ( P-CHAN-00006 : Name of the fifth (tracking) axis
+#
+# Examples for pre-definitions of axes links for synchronous operation
+# ====================================================================
+#synchro_data.koppel_gruppe[0].paar[0].log_achs_nr_slave    4       ( P-CHAN-00038 : Logical axis number of the slave axis of the first axes pair
+#synchro_data.koppel_gruppe[0].paar[0].log_achs_nr_master   1       ( P-CHAN-00037 : Logical axis number of the master axis of the first axes pair
+#synchro_data.koppel_gruppe[0].paar[0].mode                 0       ( P-CHAN-00061 : Link mode of the first axes pair (0: AXIS_LINK, 1: SPDL_LINK)
+#synchro_data.koppel_gruppe[0].paar[1].log_achs_nr_slave    5       ( P-CHAN-00038 : Logical axis number of the slave axis of the second axes pair 
+#synchro_data.koppel_gruppe[0].paar[1].log_achs_nr_master   2       ( P-CHAN-00037 : Logical axis number of the master axis of the second axes pair
+#synchro_data.koppel_gruppe[0].paar[1].mode                 0       ( P-CHAN-00061 : Link mode of the second axes pair (0: AXIS_LINK, 1: SPDL_LINK)     
+#synchro_data.restore_coupling_after_reset                  0       ( P-CHAN-00104 : Restore active axes couplings after reset in next NC program
+#synchro_data.preserve_coupling_after_prog_end              0       ( P-CHAN-00105 : Preserve active axes couplings after program end in next NC program
+#
+#log_number_tracking_axis                                   4       ( P-CHAN-00095 : Logical axis number of the tracking axis for C axis tracking
+#
+# Pre-definitions of possible NC program names for implicit calls 
+# ====================================================================
+#start_init_prog_file                      start_init.nc             ( P-CHAN-00119 : Name of a sub program implicitly called at program start  
+#
+#m6_prog_file                             tool_change.nc             ( P-CHAN-00118 : Name of a sub program implicitly called at M6              
+#
+#g80_prog_file                                G80_PRG.nc             ( P-CHAN-00160 : Name of a sub program implicitly called at G80
+#
+# Definitions via P-CHAN-00187:
+# Additional implicit sub program calls at G800-G819 
+# ====================================================================
+#g800_prog_file[0]                           G800_PRG.nc             ( Name of a sub program implicitly called at G800
+#
+#============================================================================
+#============================================================================
+#============================================================================
+#============================================================================
+# The following data are initialized together 
+# in the default list for all channels. 
+#============================================================================
+#============================================================================
+#============================================================================
+#============================================================================
+#
+#
+# M-Functions and synchronization types
+# ====================================================================
+#
+#m_synch[50]                                 0x00000002              ( MVS_SVS
+#m_synch[51]                                 0x00000002              ( MVS_SVS
+#m_synch[52]                                 0x00000002              ( MVS_SVS
+#
+#
+# Definition of "path to go", "time to go" for the 
+# synchronization types MEP_SVS, MET_SVS
+# ====================================================================
+#m_pre_outp[96]                                   100000             ( P-CHAN-00070 : [0.1um] Path pre-output of M96  
+#m_pre_outp[97]                                    40000             ( P-CHAN-00070 : [us] Time pre-output of M97 
+#
+# Examples for the definition of axis specific M functions
+# ====================================================================
+#m_default_outp_ax_name[0]                             X             ( P-CHAN-00039 : Forcing of axis specific processing of a M function (M0 on axis X)
+#m_default_outp_ax_name[1]                             Y             ( P-CHAN-00039 : Forcing of axis specific processing of a M function (M1 on axis Y)
+#m_default_outp_ax_name[10]                            S             ( P-CHAN-00039 : Forcing of axis specific processing of a M function (M10 on spindle S)
+#m_default_outp_ax_name[11]                            S2            ( P-CHAN-00039 : Forcing of axis specific processing of a M function (M11 on spindle S2)
+#m_default_outp_ax_name[12]                            Z             ( P-CHAN-00039 : Forcing of axis specific processing of a M function (M12 on axis Z)
+#
+# Definition of H functions and synchronization types
+# ====================================================================
+#h_synch[0]                                           MOS             ( P-CHAN-00027 : MOS for H0
+#
+# Definition of dimensional units and resolutions of axes
+# ====================================================================
+#mass_einh                                             0             ( P-CHAN-00054 : Dimensional unit for translatory axes (0: mm, 1: inch)   
+#rund_mass_einh                                        0             ( P-CHAN-00079 : Dimensional unit for rotatory axes (0: degree, 1: new degree) 
+#
+#lin_aufloes                                           10000         ( P-CHAN-00034 : Resolution of linear axes 
+#rund_aufloes                                          10000         ( P-CHAN-00078 : Resolution of rotary axes 
+#spind_aufloes                                         10000         ( P-CHAN-00083 : Resolution of spindle axes
+#
+# Definition of external tool management
+# ====================================================================
+ext_wzv_vorhanden                                     1             ( P-CHAN-00016 : External tool management is available (e.g. in PLC)
+t_info_to_wzv                                         1             ( P-CHAN-00087 : Inform external tool management about T command
+einrechnen_mit_t                                      1             ( P-CHAN-00014 : D command is automatically executed with the same number of the T-command (No D command required)
+#tool_life_to_wzv                                      0             ( P-CHAN-00076 : Transmit the tool life data to external tool management 
+#
+#kasto_residual_path                                   100           ( P-CHAN-00030 : [0.1um] Default residual path for edge banding (measurement)
+#
+messtyp                                               2             ( P-CHAN-00057 : Default measurement type
+#
+#versch_im_durchm                                      0             ( P-CHAN-00091 : Zero point offsets are acting in diameter (for face turning)
+# 
+mittelpkt_faktor                                      50            ( P-CHAN-00060 : [0.1%] Maximum relative centre point deviation 
+mittelpkt_diff                                        20000         ( P-CHAN-00059 : [0.1um] Maximum center point offset
+#
+#p_param_haltend                                       0             ( P-CHAN-00067 : Main program modal effect of P parameters 
+#
+#einzelschrittmodus                                    0             ( P-CHAN-00015 : Single step operation mode (-1,0,1)
+#
+#wrk_im_kanal_vorhanden                                1             ( P-CHAN-00092 : Tool radius compensation (TRC) is present
+#
+#tool.synch                                            MOS           ( P-CHAN-00086 : MOS for Txx - Tools are synchronized with PLC
+#tool.prozess_zeit                                     0             ( P-CHAN-00072 : [0.1us] Process time of the tool change (for simulation)
+#tool.minimum_length                                   100000        ( P-CHAN-00156 : [0.1um] Minimum tool length (0: no check)
+#tool.minimum_radius                                   10000         ( P-CHAN-00157 : [0.1um] Minimum tool radius (0: no check)
+#
+max_vb_override                                       1000          ( P-CHAN-00056 : [0.1%] Maximum channel override
+#
+use_drive_curr_limit                                  1             ( P-CHAN-00097 : Valid deceleration at feedhold (1: use deceleration set up in P-AXIS-00024)
+#
+#reset_no_axis_to_axv                                  1             ( P-CHAN-00075 : During reset all channel axes remain in channel
+#
+#move_tool_offsets_directly                            1             ( P-CHAN-00100 : Instant of time for including of tool compensation data into positions
+#
+rel_offset_limits_std_manual_mode                     0             ( P-CHAN-00114 : Consideration of relative offset limits with manual mode G200 (0: no consideration)
+#
+multi_dimension_in_block                              0             ( P-CHAN-00116 : Exclusivity of the G90/G91 programming in the same NC block (0: G90/G91 may be programmed only exclusively)
+#
+# Settings for syntax check
+# ====================================================================
+#syn_chk.fehler_pro_zeile                              2             ( P-CHAN-00020 : Number of errors after that it is switched to the next NC block
+#syn_chk.fehler_gesamt                                 20            ( P-CHAN-00019 : Number of errors in a NC program after that decoding is aborted
+#syn_chk.interaktiv                                    1             ( P-CHAN-00028 : Automatic continue (0), user signal expected (1)
+#
+# Settings for vector dynamic limits
+# ====================================================================
+#vector.velocity                                       1500          ( P-CHAN-00090 : [mm/min] Vector velocity limit 
+#vector.acceleration                                   1800000       ( P-CHAN-00002 : [mm/min2] Vector acceleration limit 
+#vector.deceleration                                   2000000       ( P-CHAN-00208 : [mm/min2] Vector deceleration limit 
+#
+# Settings for speed limit look ahead
+# ====================================================================
+#speed_limit_look_ahead.f_enable                       1             ( P-CHAN-00017 : Enable or disable functionality (0: disabled, 1: enabled)
+#speed_limit_look_ahead.v_limit                        750           ( P-CHAN-00089 : [0.1%] Weighting of speed limit in percent of programmed speed
+#speed_limit_look_ahead.f_time                         1             ( P-CHAN-00018 : Unit of following parameters time or path (0: path, 1: time)
+#speed_limit_look_ahead.dist_to_corner                 50000         ( P-CHAN-00013 : [0.1um or us] Setting of signal depending on distance to corner 
+#speed_limit_look_ahead.dist_from_corner               60000         ( P-CHAN-00090 : [0.1um or us] Resetting of signal depending on distance from corner 
+#
+# Path dependend dynamic weighting
+# ====================================================================
+#dynamic_weighting_active                              1             ( P-CHAN-00190 : Activation of dynamic weighting (0: not acive, 1: active )
+#
+#dynamic_weighting[0].path_limit                       10000         ( P-CHAN-00191 : [0.1um] Path distance limit (section 1)
+#dynamic_weighting[0].velocity_fact                    10            ( P-CHAN-00192 : [0.1%] Weighting factor for rapid feed velocity
+#dynamic_weighting[0].acceleration_fact                1000          ( P-CHAN-00193 : [0.1%] Weighting factor for rapid feed acceleration
+#dynamic_weighting[0].ramp_time_fact                   1000          ( P-CHAN-00194 : [0.1%] Weighting factor for rapid feed ramp time
+ 
+#
+# Examples for the default settings after NC program start for G functions
+# ========================================================================
+#prog_start.g_gruppe[0].nr                             1      ( P-CHAN-00063 : G01  is default (group  0 - path preparatory: G00,G01,G02,G03)
+#prog_start.g_gruppe[4].nr                            19      ( P-CHAN-00063 : G19  is default (group  4 - plane selection: G17,G18,G19)
+#prog_start.g_gruppe[6].nr                            26      ( P-CHAN-00063 : G26  is default (group  6 - transition mode of TRC: G25,G26)
+#prog_start.g_gruppe[8].nr                            51      ( P-CHAN-00063 : G51  is default (group  8 - diameter programming: G51,G52)
+#prog_start.g_gruppe[12].nr                           71      ( P-CHAN-00063 : G71  is default (group 12 - unit: G70,G71)
+#prog_start.g_gruppe[14].nr                           91      ( P-CHAN-00063 : G91  is default (group 14 - dimension: G90,G91)
+#prog_start.g_gruppe[22].nr                          138      ( P-CHAN-00063 : G138 is default (group 22 - selection mode of TRC : G138,G139)
+#prog_start.g_gruppe[23].nr                          162      ( P-CHAN-00063 : G162 is default (group 23 - circle center point programming: G161,G162)
+#prog_start.g_gruppe[25].nr                          164      ( P-CHAN-00063 : G164 is default (group 25 - circle center point correction: G164,G165)
+#
+# Examples for the default settings after NC program start for spindle M functions
+# ================================================================================
+#prog_start.m_gruppe[0].nr                             3      ( P-CHAN-00064 : M3 is default spindle M function (M03,M04,M05)
+#
+# Examples for the default settings after NC program start for dynamic parameters
+# ===============================================================================
+#prog_start.feedrate                                   0      ( P-CHAN-00099 : [mm/min or m/min, depends on P-CHAN-00108] Default feedrate for G01,G02,G03 
+prog_start.slope.profile                               1      ( P-CHAN-00071 : Type of acceleration profile (1: active jerk limitation)
+#prog_start.slope.ramp_time                            2      ( P-CHAN-00073 : Effect of the ramp time weighting
+#prog_start.slope.acceleration                         2      ( P-CHAN-00001 : Effect of the acceleration weighting 
+#prog_start.feedrate_factor                            0.1    ( P-CHAN-00108 : Unit of the feedrate (0.1: m/min, 100: mm/min)
+#
+# Settings for protocol log changes
+# ===============================================================================
+aep.output_mode                                       1      ( P-CHAN-00024 : Protocolling mode (1: protocolling through BF-own display fields and display fifos)
+aep.p_parameter                                       0      ( P-CHAN-00068 : Protocolling of P parameters
+aep.v_eigendef                                        0      ( P-CHAN-00088 : Protocolling of self defined variables
+aep.wz_daten                                          0      ( P-CHAN-00093 : Protocolling of tool data
+#
+aep.g_gruppe[0]                                       1      ( P-CHAN-00022 : AEP group 0  (G00,G01,G02,G03,G04,G33,G63,G74,G98,G99,G301,G302,G160)
+aep.g_gruppe[1]                                       0      ( P-CHAN-00022 : AEP group 1  (G08,G193)
+aep.g_gruppe[2]                                       0      ( P-CHAN-00022 : AEP group 2  (G09,G900,G901)
+aep.g_gruppe[3]                                       0      ( P-CHAN-00022 : AEP group 3  (G10,G11)
+aep.g_gruppe[4]                                       1      ( P-CHAN-00022 : AEP group 4  (G17,G18,G19)
+aep.g_gruppe[5]                                       1      ( P-CHAN-00022 : AEP group 5  (G20,G21,G22,G23,G24,G351)
+aep.g_gruppe[6]                                       0      ( P-CHAN-00022 : AEP group 6  (G25,G26)
+aep.g_gruppe[7]                                       1      ( P-CHAN-00022 : AEP group 7  (G40,G41,G42)
+aep.g_gruppe[8]                                       1      ( P-CHAN-00022 : AEP group 8  (G51,G52)     
+aep.g_gruppe[9]                                       1      ( P-CHAN-00022 : AEP group 9  (G53-G59,G159)
+aep.g_gruppe[10]                                      1      ( P-CHAN-00022 : AEP group 10 (G60,G359,G360,G61,G260,G261)
+aep.g_gruppe[11]                                      0      ( P-CHAN-00022 : AEP group 11 (G166)
+aep.g_gruppe[12]                                      0      ( P-CHAN-00022 : AEP group 12 (G70,G71)
+aep.g_gruppe[13]                                      0      ( P-CHAN-00022 : AEP group 13 (G80-G89,G800-G819)
+aep.g_gruppe[14]                                      1      ( P-CHAN-00022 : AEP group 14 (G90,G91)
+aep.g_gruppe[15]                                      1      ( P-CHAN-00022 : AEP group 15 (G92)
+aep.g_gruppe[16]                                      0      ( P-CHAN-00022 : AEP group 16 (G93,G94,G95,G194)
+aep.g_gruppe[17]                                      0      ( P-CHAN-00022 : AEP group 17 (G96,G97,G196)         
+aep.g_gruppe[18]                                      1      ( P-CHAN-00022 : AEP group 18 (G112)
+aep.g_gruppe[19]                                      0      ( P-CHAN-00022 : AEP group 19 (G115,G116,G117)
+aep.g_gruppe[20]                                      0      ( P-CHAN-00022 : AEP group 20 (G130,G131)
+aep.g_gruppe[21]                                      0      ( P-CHAN-00022 : AEP group 21 (G135,G136,G137)
+aep.g_gruppe[22]                                      0      ( P-CHAN-00022 : AEP group 22 (G05,G138,G139,G237,G238,G239)
+aep.g_gruppe[23]                                      0      ( P-CHAN-00022 : AEP group 23 (G161,G162)
+aep.g_gruppe[24]                                      0      ( P-CHAN-00022 : AEP group 24 (G163)
+aep.g_gruppe[25]                                      0      ( P-CHAN-00022 : AEP group 25 (G164,G165)
+aep.g_gruppe[26]                                      1      ( P-CHAN-00022 : AEP group 26 (G200,G201,G202)
+aep.g_gruppe[27]                                      1      ( P-CHAN-00022 : AEP group 27 (NOT AVAILABLE)
+aep.g_gruppe[28]                                      0      ( P-CHAN-00022 : AEP group 28 (G132,G133,G134)
+aep.g_gruppe[29]                                      1      ( P-CHAN-00022 : AEP group 29 (G150,G151)
+aep.g_gruppe[30]                                      1      ( P-CHAN-00022 : AEP group 30 (G100,G101,G102,G106,G107,G108)
+aep.g_gruppe[31]                                      1      ( P-CHAN-00022 : AEP group 31 (G12,G13)
+aep.g_gruppe[32]                                      0      ( P-CHAN-00022 : AEP group 32 (G140,G141)
+aep.g_gruppe[33]                                      0      ( P-CHAN-00022 : AEP group 33 (NOT AVAILABLE)
+aep.g_gruppe[34]                                      0      ( P-CHAN-00022 : AEP group 34 (G310)
+aep.g_gruppe[35]                                      0      ( P-CHAN-00022 : AEP group 35 (G167)
+aep.g_gruppe[36]                                      0      ( P-CHAN-00022 : AEP group 36 (NOT AVAILABLE) 
+aep.g_gruppe[37]                                      0      ( P-CHAN-00022 : AEP group 37 (G129)
+#
+# Definition of symbolic character strings (macros)
+# =======================================================
+#makro_def[0].symbol                           SYMBOL_0       ( P-CHAN-00057 : Macro name in NC program )
+#makro_def[0].nc_code                            CODE_0       ( P-CHAN-00062 : Related NC code to be replaced )
+#makro_def[1].symbol                           SYMBOL_1       ( P-CHAN-00057 : Macro name in NC program )
+#makro_def[1].nc_code                            CODE_1       ( P-CHAN-00062 : Related NC code to be replaced )
+#
+#
+# Definition kinematic data
+# =======================================================
+#
+# All kinematic parameters (kinematik[i].param[j]) in [0.1um]
+#
+#kinematik_id                                          9      ( P-CHAN-00032 : Default selection of kinematic ID (e.g 9: 5 axes machine X,Y,Z,C,A)
+#
+#
+# Example for kinematic parameter settings (kinematic 9)
+# =======================================================
+#
+trafo[0].id                                            9  
+trafo[0].param[0]                                5000000
+trafo[0].param[1]                                      0
+trafo[0].param[2]                                      0
+trafo[0].param[3]                                      0
+trafo[0].param[4]                                      0
+trafo[0].param[5]                                      0
+trafo[0].param[6]                                      0
+#
+Ende
+]]></SdaMds><NullpD><![CDATA[# *******************************************
+#
+#TC_CHANNEL_DESC_2: Zero position offsets of a channel
+#
+# *******************************************
+#                                                            
+g53_verfuegbar                                        0                  ( P-ZERO-00001 : Use G53 with offset not equal to ZERO
+default_index                                         0                  ( P-ZERO-00002 : Default group index after reset
+#
+# G53 :
+#
+np_grp[0].achse[0].versch                             0                  ( P-ZERO-00003 : [0.1um] Offset of first channel axis
+np_grp[0].achse[0].inaktiv                            0                  ( P-ZERO-00004 : Active state of offset (0: active, 1: not active)
+np_grp[0].achse[1].versch                             0                  ( P-ZERO-00003 : [0.1um] Offset of second channel axis
+np_grp[0].achse[1].inaktiv                            0                  ( P-ZERO-00004 : Active state of offset (0: active, 1: not active)
+np_grp[0].achse[2].versch                             0                  ( P-ZERO-00003 : [0.1um] Offset of third channel axis
+np_grp[0].achse[2].inaktiv                            0                  ( P-ZERO-00004 : Active state of offset (0: active, 1: not active)
+#                                                            
+# G54 :                                                      
+#                                                            
+np_grp[1].achse[0].versch                             0                              
+np_grp[1].achse[0].inaktiv                            0                              
+np_grp[1].achse[1].versch                             0                              
+np_grp[1].achse[1].inaktiv                            0                              
+np_grp[1].achse[2].versch                             0                              
+np_grp[1].achse[2].inaktiv                            0                              
+#                                                            
+# G55 :                                                      
+#                                                            
+np_grp[2].achse[0].versch                             0                              
+np_grp[2].achse[0].inaktiv                            0                              
+np_grp[2].achse[1].versch                             0                              
+np_grp[2].achse[1].inaktiv                            0                              
+np_grp[2].achse[2].versch                             0                              
+np_grp[2].achse[2].inaktiv                            0                              
+#                                                            
+# G56 :                                                      
+#                                                            
+np_grp[3].achse[0].versch                             0                              
+np_grp[3].achse[0].inaktiv                            0                              
+np_grp[3].achse[1].versch                             0                              
+np_grp[3].achse[1].inaktiv                            0                              
+np_grp[3].achse[2].versch                             0                              
+np_grp[3].achse[2].inaktiv                            0                              
+#                                                            
+# G57 :                                                      
+#                                                            
+np_grp[4].achse[0].versch                             0                              
+np_grp[4].achse[0].inaktiv                            0                              
+np_grp[4].achse[1].versch                             0                              
+np_grp[4].achse[1].inaktiv                            0                              
+np_grp[4].achse[2].versch                             0                              
+np_grp[4].achse[2].inaktiv                            0                              
+#                                                            
+# G58 :                                                      
+#                                                            
+np_grp[5].achse[0].versch                             0                              
+np_grp[5].achse[0].inaktiv                            0                              
+np_grp[5].achse[1].versch                             0                              
+np_grp[5].achse[1].inaktiv                            0                              
+np_grp[5].achse[2].versch                             0                              
+np_grp[5].achse[2].inaktiv                            0                              
+#                                                            
+# G59 :                                                      
+#                                                            
+np_grp[6].achse[0].versch                             0                              
+np_grp[6].achse[0].inaktiv                            0                              
+np_grp[6].achse[1].versch                             0                              
+np_grp[6].achse[1].inaktiv                            0                              
+np_grp[6].achse[2].versch                             0                              
+np_grp[6].achse[2].inaktiv                            0                              
+#                                                            
+# G159 = 7:                                                      
+#                                                            
+np_grp[7].achse[0].versch                             0                              
+np_grp[7].achse[0].inaktiv                            0                              
+np_grp[7].achse[1].versch                             0                              
+np_grp[7].achse[1].inaktiv                            0                              
+np_grp[7].achse[2].versch                             0                              
+np_grp[7].achse[2].inaktiv                            0                              
+#                                                            
+Ende                                                         
+
+]]></NullpD><WerkzD><![CDATA[# ********************************
+# 
+#TC_CHANNEL_DESC_3:  Werkzeugdaten 
+# 
+#     Einheit:   0.1 Mikrometer
+# 
+# ********************************
+# 
+wz[1].gueltig                                         1              ( P-TOOL-00005 : Validity flag of tool data
+wz[1].typ                                             0              ( P-TOOL-00001 : Tool type (0: Milling, 1: Turning, 2: Grinding)
+wz[1].srk_lage                                        0              ( P-TOOL-00002 : Cutter orientation ID, required only for turning tool
+wz[1].mass_einheit                                    0              ( P-TOOL-00008 : Unit of tool data (0: mm, 1: inch)
+wz[1].laenge                                          0              ( P-TOOL-00003 : [0.1um or 0.0001 inch] Tool length
+wz[1].radius                                          0              ( P-TOOL-00004 : [0.1um or 0.0001 inch] Tool radius
+wz[1].ax_versatz[0]                                   0              ( P-TOOL-00006 : [0.1um or 0.0001 inch] Tool axis offset of first channel axis        
+wz[1].ax_versatz[1]                                   0              ( P-TOOL-00006 : [0.1um or 0.0001 inch] Tool axis offset of second channel axis 
+wz[1].ax_versatz[2]                                   0              ( P-TOOL-00006 : [0.1um or 0.0001 inch] Tool axis offset of third channel axis 
+wz[1].kinematic.param[0]                              0              ( P-TOOL-00009 : [0.1um or 0.0001 inch] Tool specific kinematic parameter (tool head offsets)
+wz[1].kinematic.param[1]                              0              ( P-TOOL-00009 : [0.1um or 0.0001 inch] Tool specific kinematic parameter (tool head offsets)
+wz[1].kinematic.param[2]                              0              ( P-TOOL-00009 : [0.1um or 0.0001 inch] Tool specific kinematic parameter (tool head offsets)
+wz[1].kin_id                                          0              ( P-TOOL-00011 : Kinematics transformation to be required for the tool 
+wz[1].tool_fixed                                      0              ( P-TOOL-00010 : Tool orientation relative to the machine-axes coordinate system
+wz[1].param[0]                                        0              ( P-TOOL-00007 : Additional tool parameter - example
+wz[1].param[1]                                        0              ( P-TOOL-00007 : Additional tool parameter - example
+wz[1].param[2]                                        0              ( P-TOOL-00007 : Additional tool parameter - example
+wz[1].param[3]                                        0              ( P-TOOL-00007 : Additional tool parameter - example
+wz[1].param[4]                                        0              ( P-TOOL-00007 : Additional tool parameter - example
+wz[1].param[5]                                        0              ( P-TOOL-00007 : Additional tool parameter - example
+wz[1].param[6]                                        0              ( P-TOOL-00007 : Additional tool parameter - example
+wz[1].param[7]                                        0              ( P-TOOL-00007 : Additional tool parameter - example
+wz[1].param[8]                                        0              ( P-TOOL-00007 : Additional tool parameter - example
+wz[1].param[9]                                        0              ( P-TOOL-00007 : Additional tool parameter - example
+wz[1].param[10]                                       0              ( P-TOOL-00007 : Additional tool parameter - example
+wz[1].param[11]                                       0              ( P-TOOL-00007 : Additional tool parameter - example
+wz[1].param[12]                                       0              ( P-TOOL-00007 : Additional tool parameter - example
+wz[1].param[13]                                       0              ( P-TOOL-00007 : Additional tool parameter - example
+wz[1].param[14]                                       0              ( P-TOOL-00007 : Additional tool parameter - example
+wz[1].param[15]                                       0              ( P-TOOL-00007 : Additional tool parameter - example
+wz[1].param[16]                                       0              ( P-TOOL-00007 : Additional tool parameter - example
+wz[1].log_ax_nr_spdl                                  0              ( P-TOOL-00012 : Logical axis number of the spindle (required for tool dynamic data, 0: not assigned)
+wz[1].vb_min                                          0              ( P-TOOL-00013 : Tool dynamic data, minimum spindle speed
+wz[1].vb_max                                          0              ( P-TOOL-00014 : Tool dynamic data, maximum spindle speed
+wz[1].a_max                                           0              ( P-TOOL-00015 : Tool dynamic data, maximum spindle acceleration
+#wz[1].grinding_disc_type                             0              ( Use in preparation : Type of grinding disc
+wz[1].grinding_wear_const                             0              ( P-TOOL-00030 : [0.1µm/m] Wear constant, Example 100: 10µm/m wear
+wz[1].grinding_max_infeed                             0              ( P-TOOL-00031 : [0.1µm] Maximum infeed commanded via PLC
+wz[1].grinding_disc_tilt_angle                        0              ( P-TOOL-00138 : [0.0001°] Tilt angle of grinding disc
+#wz[1].grinding_disc_min_radius                       0              ( Use in preparation : [0.1µm] Minimum grinding disc radius
+#wz[1].grinding_disc_min_width                        0              ( Use in preparation : [0.1µm] Minimum grinding disc width
+#
+Ende
+]]></WerkzD><PzvD><![CDATA[# **********************************************************
+#
+#TC_CHANNEL_DESC_4: Clamp position offsets of a channel
+#
+# Unit: 0.1um
+#
+# **********************************************************
+#
+# -----------------------------------
+#  1.clamp position offset group
+# -----------------------------------
+#
+pzv_grp[0].achse[0].versatz                           0             ( P-CLMP-00001 : [0.1um] Offset of first channel axis
+pzv_grp[0].achse[1].versatz                           0             ( P-CLMP-00001 : [0.1um] Offset of second channel axis
+pzv_grp[0].achse[2].versatz                           0             ( P-CLMP-00001 : [0.1um] Offset of third channel axis
+#
+# -----------------------------------
+#  2.clamp position offset group
+# -----------------------------------
+#
+pzv_grp[1].achse[0].versatz                           0
+pzv_grp[1].achse[1].versatz                           0
+pzv_grp[1].achse[2].versatz                           0
+#
+# -----------------------------------
+#  3.clamp position offset group
+# -----------------------------------
+#
+pzv_grp[2].achse[0].versatz                           0
+pzv_grp[2].achse[1].versatz                           0
+pzv_grp[2].achse[2].versatz                           0
+#
+# -----------------------------------
+#  4.clamp position offset group
+# -----------------------------------
+#
+pzv_grp[3].achse[0].versatz                           0
+pzv_grp[3].achse[1].versatz                           0
+pzv_grp[3].achse[2].versatz                           0
+#
+# -----------------------------------
+#  5.clamp position offset group
+# -----------------------------------
+#
+pzv_grp[4].achse[0].versatz                           0
+pzv_grp[4].achse[1].versatz                           0
+pzv_grp[4].achse[2].versatz                           0
+#
+Ende
+]]></PzvD><VeD><![CDATA[# ****************************************                   
+#                                                            
+#TC_CHANNEL_DESC_5:     External Variables
+#                                                            
+# ****************************************                   
+#                                                            
+name_rd_global_array      cnc_ve_%s_[%d]_r
+name_wr_global_array      cnc_ve_%s_[%d]_w
+name_rd_channel_array     mc_ve_%s_[%d]_r
+name_wr_channel_array     mc_ve_%s_[%d]_w
+name_rd_global            cnc_ve_%s_r
+name_wr_global            cnc_ve_%s_w
+name_rd_channel           mc_ve_%s_r
+name_wr_channel           mc_ve_%s_w
+#
+use_extended_string_var                               0
+#                                                            
+number_used_variables                                 1
+#                                                            
+var[0].name                                           Template
+var[0].type                                           REAL64
+var[0].scope                                          GLOBAL
+var[0].synchronisation                                TRUE
+var[0].access_rights                                  READ_WRITE
+var[0].array_size                                     0
+#
+Ende                                                         
+
+]]></VeD></IsgChannelDef></TreeItem>

@@ -127,7 +127,7 @@ def show_twincat_create_auto_page():
             print(f"OPC UA Kanal-Axis structure: {opcua_structure}")
 
             # 获取 TwinCAT 结构
-            twincat_structure = manager.parse_kanal_and_axis(available_paths)
+            twincat_structure = manager.parse_kanal_and_axis_by_xml(available_paths)
             append_log("[OK] Parsed TwinCAT Kanal-Axis structure.")
 
             print(f"TwinCAT Kanal-Axis structure: {twincat_structure}")

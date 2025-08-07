@@ -289,10 +289,68 @@ def safe_read_file(file_path: str) -> str:
         with open(file_path, "r", encoding="latin1") as f:   
             return f.read()
 
+def change_xml_from_new_axis(xml_data: str, axis_name: str, kanal_name: str) -> str:
+    """
+    Write new Axis XML data to the XML file, including kanal and axis information.
+    """
 
-def change_xml_from_new_axis(xml_data: str, ) -> str:
-    """
-    Write new Axis XML data to the XML file.
-    """
-    # 这里需要实现具体的写入逻辑
-    pass
+    # 1. load environment variables and .lis file paths
+    dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
+    load_dotenv(dotenv_path)
+    lis_base_path = os.getenv("LIS_BASE_PATH")
+    if not lis_base_path:
+        raise ValueError("LIS_BASE_PATH is not set in .env")
+
+    lis_file_name = "achsmds1.lis"
+    lis_path = os.path.join(lis_base_path, lis_file_name)
+
+    # 2. check and parse XML
+    if not xml_data:
+        raise ValueError("XML data is empty.")
+
+    try:
+        root = ET.fromstring(xml_data)
+    except ET.ParseError as e:
+        raise ValueError(f"Invalid XML: {e}")
+
+    # 3. read .lis file content
+    if not os.path.exists(lis_path):
+        raise FileNotFoundError(f"{lis_path} not found")
+
+    with open(lis_path, "r", encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+
+    # 4. extract kanal number from kanal_name and write to <DefaultChannel>
+    try:
+        kanal_num = int(kanal_name.split("_")[-1])
+    except (IndexError, ValueError):
+        raise ValueError(f"Invalid kanal_name format: {kanal_name}")
+
+    dc_elem = root.find(".//DefaultChannel")
+    if dc_elem is None:
+        raise ValueError("Missing <DefaultChannel> element in XML")
+    dc_elem.text = str(kanal_num)
+
+    # 5. extract axis number from axis_name and write to <DefaultIndex>
+    try:
+        axis_index = int(axis_name.split("_")[-1])
+    except (IndexError, ValueError):
+        raise ValueError(f"Invalid axis_name format: {axis_name}")
+
+    di_elem = root.find(".//DefaultIndex")
+    if di_elem is None:
+        raise ValueError("Missing <DefaultIndex> element in XML")
+    di_elem.text = str(axis_index-1)    # # Index is zero-based, so we subtract 1
+
+    # 6. inject CDATA content into <AchsMds>
+    achs_elem = root.find(".//AchsMds")
+    if achs_elem is None:
+        raise ValueError("Missing <AchsMds> element in XML")
+
+    achs_elem.text = f"<![CDATA[{content}]]>"
+
+    # 7. return XML string
+    xml_string = ET.tostring(root, encoding="unicode")
+    xml_string = xml_string.replace("&lt;![CDATA[", "<![CDATA[").replace("]]&gt;", "]]>")
+
+    return xml_string

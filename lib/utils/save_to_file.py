@@ -23,17 +23,17 @@ def load_structure_from_file(filename: str) -> dict:
     with open(filepath, "r", encoding="utf-8") as f:
         return json.load(f)
     
-def save_kanal_xml_to_file(xml_data, kanal_name: str):
+def save_xml_to_file(xml_data, Name: str):
     """
     保存 Kanal 的 XML 数据到文件
     """
-    TEMP_DIR_XML = TEMP_DIR+ "/Kanal_XML" 
-    filename = f"{kanal_name}.xml"
+    TEMP_DIR_XML = TEMP_DIR+ "/XML_Datei" 
+    filename = f"{Name}.xml"
     filepath = os.path.join(TEMP_DIR_XML, filename)
 
     os.makedirs(TEMP_DIR_XML, exist_ok=True)  # 确保目标文件夹存在
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(xml_data)
 
-    print(f"[OK] Saved XML for {kanal_name} to {filepath}")
+    print(f"[OK] Saved XML for {Name} to {filepath}")
     return filepath

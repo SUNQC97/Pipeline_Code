@@ -18,7 +18,7 @@ from lib.utils.xml_read_write import (
     change_xml_from_new_axis
 )
 from lib.services.client import convert_trafo_lines, convert_axis_lines, fetch_axis_json, fetch_trafo_json, read_all_kanal_configs
-from lib.utils.save_to_file import save_kanal_xml_to_file
+from lib.utils.save_to_file import save_xml_to_file
 
 def load_config():
     dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
@@ -486,7 +486,7 @@ def descale_trafo_values(param_names: list, param_values: list, factor: int = 10
         descaled_values.append(descaled)
     return descaled_values
 
-def parse_axis_xml(sysman, node_path: str, channel_name_map: dict) -> dict:
+def parse_axis_xml(sysman, node_path: str) -> dict:
     """
         Parse the XML of an Axis node to extract its name and Kanal information.
         returns a dict with axis_name, kanal_name, default_channel, and default_index.
@@ -512,8 +512,7 @@ def parse_axis_xml(sysman, node_path: str, channel_name_map: dict) -> dict:
         if not axis_name_twincat or not default_channel or not default_index:
             return {"error": "Missing required Axis parameters"}
 
-        # 用 channel_name_map 获取实际 Kanal 节点名
-        kanal_name = channel_name_map.get(int(default_channel), f"Channel_{default_channel}")
+        kanal_name = f"Kanal_{default_channel}"
 
         return {
             "axis_name": axis_name_twincat,
@@ -565,42 +564,41 @@ def write_xml_to_new_kanal(sysman, node_path: str, kanal_name: str):
             print(f"Node {node_path} is not a valid Kanal node.")
             return
 
-        modified_xml = change_xml_from_new_kanal(xml_data, kanal_name)
+        modified_xml = change_xml_from_new_kanal(xml_data)
         update_node_with_xml(node, modified_xml)
 
 
-        save_kanal_xml_to_file(modified_xml, kanal_name)
+        save_xml_to_file(modified_xml, kanal_name)
         print(f"New Kanal XML written successfully for {kanal_name}")
 
     except Exception as e:
         print(f"Error writing new Kanal XML: {e}")
 
-
-def write_xml_to_new_axis(sysman, node_path: str):
+def write_xml_to_new_axis(sysman, node_path: str, new_axis_name: str, axis_name: str, kanal_name: str):
     """
     Write new Axis XML data to the XML file.
+    axis_name: Axis name in the format "Axis_1", "Axis_2", etc.
+    new_axis_name: New Axis name in the format "Axis_11", "Axis_21", etc.
     """
     try:
         node = sysman.LookupTreeItem(node_path)
         xml_data = node.ProduceXml(True)
         root = ET.fromstring(xml_data)
-
-        axis_name = root.findtext("ItemName")
+        
         item_type = root.findtext("ItemType")
 
-        # 这里需要实现具体的写入逻辑
-        new_axis_xml = ET.Element("Axis")
-        ET.SubElement(new_axis_xml, "ItemName").text = axis_name
-        ET.SubElement(new_axis_xml, "ItemType").text = item_type
+        if item_type != "403":
+            print(f"Node {node_path} is not a valid Axis node.")
+            return
+        
+        modified_xml = change_xml_from_new_axis(xml_data, axis_name, kanal_name)
+        update_node_with_xml(node, modified_xml)
 
-        # 将新 XML 写入文件
-        tree = ET.ElementTree(new_axis_xml)
-        tree.write(f"new_{axis_name}.xml", encoding="utf-8", xml_declaration=True)
+        save_xml_to_file(modified_xml, new_axis_name)
 
     except Exception as e:
-        print(f"Error writing new Axis XML: {e}")
-    """
-    Write new Axis XML data to the XML file.
-    """
-    # 这里需要实现具体的写入逻辑
-    pass
+        print(f"Error reading XML data: {e}")
+    
+     
+    
+    
