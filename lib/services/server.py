@@ -102,7 +102,6 @@ def update_trafo_config(server_instance, kanal_name, trafo_names, trafo_values):
     update_kanal_axis_config(server_instance, kanal_name, "TrafoConfigJSON", trafo_names, trafo_values)
     print(f"[OK] TrafoConfigJSON for {kanal_name} updated.")
 
-
 def read_kanal_data_from_server_instance(server_instance, kanal_name):
     """
     Read Trafo and Axis data from a specific Kanal node in the server instance.
@@ -130,3 +129,25 @@ def read_kanal_data_from_server_instance(server_instance, kanal_name):
             "axis_names": [],
             "axis_values": [],
         }
+
+def read_all_kanal_data_from_server_instance(server_instance):
+    result = {}
+    kanal_nodes = server_instance.get_objects_node().get_children()
+
+    for kanal_node in kanal_nodes:
+        kanal_name = kanal_node.get_browse_name().Name
+        try:
+            kanal_node_obj = server_instance.get_objects_node().get_child([f"2:{kanal_name}"])
+            trafo_raw = kanal_node_obj.get_child(f"2:TrafoConfigJSON").get_value()
+            axis_raw = kanal_node_obj.get_child(f"2:AxisConfigJSON").get_value()
+
+            result[kanal_name] = {
+                "TrafoConfigJSON": trafo_raw,
+                "AxisConfigJSON": axis_raw
+            }
+
+        except Exception as e:
+            print(f"[ERROR] Failed to read {kanal_name}: {e}")
+            continue
+
+    return result

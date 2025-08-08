@@ -1,8 +1,16 @@
 {
   "missing_kanals": [],
-  "missing_axes": {},
-  "extra_kanals": [
-    "Kanal_2"
-  ],
-  "extra_axes": {}
+  "missing_axes": {
+    "Kanal_2": [
+      "Ext_1",
+      "Ext_2"
+    ]
+  },
+  "extra_kanals": [],
+  "extra_axes": {
+    "Kanal_2": [
+      "Axis_1",
+      "Axis_2"
+    ]
+  }
 }

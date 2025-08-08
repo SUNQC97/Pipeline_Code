@@ -193,7 +193,6 @@ def show_twincat_auto_page():
         except Exception as e:
             append_log(f"[Error] Exception during full read: {e}")
 
-
     # Start OPC UA Client listener
     # This will listen for changes in the OPC UA server and trigger the callback
     async def start_opcua_client_listener():
@@ -235,7 +234,6 @@ def show_twincat_auto_page():
 
         except Exception as e:
             append_log(f"[Error] OPC UA Listener failed: {e}")
-
 
     async def stop_opcua_client_listener():
         nonlocal opc_subscription_started

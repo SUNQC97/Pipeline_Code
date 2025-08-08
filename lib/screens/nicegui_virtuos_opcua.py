@@ -9,6 +9,7 @@ import asyncio
 from lib.screens.state import kanal_inputs
 from lib.services.opcua_tool import ConfigChangeHandler
 from lib.services.client import connect_opcua_client
+from lib.utils.save_to_file import save_opcua_data_to_file
 
 skip_write_back_in_virtuos = None
 
@@ -120,7 +121,6 @@ def show_virtuos_server():
         except Exception as e:
             await append_log(f"[EXCEPTION] Failed to connect to Virtuos: {e}")
 
-
     async def connect_to_existing_virtuos_after_start():
         global initialized, vz_env, vz
         try:
@@ -187,7 +187,6 @@ def show_virtuos_server():
         except Exception as e:
             await append_log(f"[EXCEPTION] {e}")
 
-
     async def write_back_all_from_opcua_server():
         global vz, opc_server_instance, skip_write_back_in_virtuos
         
@@ -216,12 +215,13 @@ def show_virtuos_server():
 
                 await append_log(f"[OK] {kanal} → Virtuos written from server variables.")
 
+            save_opcua_data(opc_server_instance)
+
         except Exception as e:
             await append_log(f"[EXCEPTION] Failed to write back from OPC UA Server: {e}")
 
         finally:
             skip_write_back_in_virtuos = None        
-
 
     async def read_and_start_multi_kanal_server():
         global vz, opc_server_instance, skip_write_back_in_virtuos
@@ -251,6 +251,9 @@ def show_virtuos_server():
                 await append_log("[OK] Multi-Kanal OPC UA Server started.")
             else:
                 await append_log("[ERROR] Failed to start OPC UA server.")
+            
+            # save the initial data to file
+            save_opcua_data(opc_server_instance)
         except Exception as e:
             await append_log(f"[EXCEPTION] Failed to start OPC UA server: {e}")                            
     
@@ -309,6 +312,12 @@ def show_virtuos_server():
                 listener_status_label.style('color: red; font-weight: bold;')
         else:
             await append_log("[INFO] No active OPC UA listener.")
+    
+    def save_opcua_data(opc_server_instance):
+        
+        kanal_data_dict = server.read_all_kanal_data_from_server_instance(opc_server_instance)
+        save_opcua_data_to_file(kanal_data_dict)
+
 
     ui.label("Virtuos → OPC UA Bridge").style("font-weight: bold; font-size: 20px;")
     with ui.row().style("margin-bottom: 10px"):

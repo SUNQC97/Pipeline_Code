@@ -94,7 +94,46 @@ class VirtuosEnv:
         except Exception as e:
             print(f"Exception occurred during disconnect: {e}")
 
+    def run_simulation(self):
+        """
+        Ramps up and starts the simulation.
+        Returns:
+            bool: True if both steps succeed, else False.
+        """
+        if self.vz:
+            try:
+                if self.vz.rampUpSim() == self.vz.V_SUCCD and self.vz.startSim() == self.vz.V_SUCCD:
+                    print("Simulation started successfully.")
+                    return True
+                else:
+                    print("Failed to start simulation.")
+            except Exception as e:
+                print(f"Exception during simulation start: {e}")
+        return False
 
+    def stop_simulation(self):
+        """
+        Stops and ramps down the simulation.
+        Returns:
+            bool: True if both steps succeed, else False.
+        """
+        if self.vz:
+            try:
+                self.vz.stopUpdate()
+            except Exception as e:
+                print(f"Exception during stopUpdate (ignored): {e}")
+            try:
+                if self.vz.stopSim() == self.vz.V_SUCCD and self.vz.rampDownSim() == self.vz.V_SUCCD:
+                    print("Simulation stopped successfully.")
+                    return True
+                else:
+                    print("Failed to stop or ramp down simulation.")
+            except Exception as e:
+                print(f"Exception during simulation stop: {e}")
+        return False
+
+def execute_js_code_from_file(vz, file_path):
+    pass
 
 def read_value_model(vz, parameter_path: str):
 
@@ -103,7 +142,6 @@ def read_value_model(vz, parameter_path: str):
         return
     Parameter_Value = vz.getParameterBlock_New(parameter_path)
     return Parameter_Value
-
 
 def read_Value_Model_json(vz, parameter_path: str):
     trafo_params = {}
@@ -152,7 +190,6 @@ def read_Value_Model_json(vz, parameter_path: str):
                     print(f"Error reading {full_key}: {e}")
 
     return trafo_params, axis_params
-
 
 def extract_trafo_param_list(vz, parameter_path):
     trafo_params, _ = read_Value_Model_json(vz, parameter_path)
@@ -210,9 +247,6 @@ def convert_param_name_for_write(param_name: str) -> str:
     # Axis/Ext: 保持原样，如 Axis_1.s_max → Axis_1.s_max
     return param_name
 
-
-
-
 def load_block_map() -> dict:
     """
     Load the block map from the file specified by the environment variable BLOCK_MAP_PATH.
@@ -255,7 +289,6 @@ def load_block_map() -> dict:
 
     return block_path_dict
 
-
 def get_block_path(block_name: str, block_map: dict) -> str:
     """
     Get the full block path from a given block name.
@@ -268,3 +301,31 @@ def get_block_path(block_name: str, block_map: dict) -> str:
         str: The full block path, or "Not Found" if it does not exist.
     """
     return block_map.get(block_name.strip(), "Not Found")
+
+def extract_controller_paths():
+    """
+    Extracts paths containing 'Controller' from a given file, and returns a list of these paths, truncated to end at 'Controller'.
+    
+    Parameters:
+        file_path (str): The file path to the file to be processed.
+    
+    Returns:
+        list: A list of paths containing 'Controller', truncated to end at 'Controller'.
+    """
+    # Set to store unique paths
+    controller_paths = set()
+    
+    # Regex to find paths containing 'Controller'
+    pattern = re.compile(r'\[.*?Controller.*?\]')
+    
+    with open(controller_path, 'r') as file:
+        for line in file:
+            # Find all occurrences of 'Controller' in the line
+            matches = pattern.findall(line)
+            for match in matches:
+                # Split the path at the word 'Controller' and keep up to 'Controller'
+                truncated_path = match.split('.[Programs')[0]
+                controller_paths.add(truncated_path)
+    
+    # Convert the set back to a list if needed
+    return list(controller_paths)

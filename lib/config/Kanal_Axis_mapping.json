@@ -1,17 +1,3 @@
 {
-  "Kanal_1": {
-    "[Block Diagram].[RobotController]": "Kanal_1",
-    "Axis_1": "Achse_1",
-    "Axis_2": "Achse_2",
-    "Axis_3": "Achse_3",
-    "Axis_4": "Achse_4",
-    "Axis_5": "Achse_5",
-    "Axis_6": "Achse_6"
-  },
-  "Kanal_2": {
-    "[Block Diagram].[AxisController3p__1__1__1_0]": "Kanal_2",
-    "Ext_1": "X_Achse",
-    "Ext_2": "Y_Achse",
-    "Ext_3": "Z_Achse"
-  }
+
 }
