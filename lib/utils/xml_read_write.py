@@ -253,7 +253,7 @@ def change_xml_from_new_kanal(xml_data) -> str:
         for field, filename in default_lis_filenames.items()
     }
 
-    # 3. 解析原始 XML
+    # 3. 解析原始 XML analysieren
     if not xml_data:
         raise ValueError("XML data is empty.")
     
@@ -262,7 +262,7 @@ def change_xml_from_new_kanal(xml_data) -> str:
     except ET.ParseError as e:
         raise ValueError(f"Invalid XML data: {e}")
 
-    # 4. 遍历每个字段，插入对应 .lis 内容
+    # 4. 遍历每个字段，插入对应 .lis 内容 durchlaufen 
     for field, file_path in lis_files.items():
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Missing .lis file for {field}: {file_path}")
