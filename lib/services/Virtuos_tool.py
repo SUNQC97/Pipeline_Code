@@ -267,7 +267,7 @@ def load_block_map() -> dict:
     block_path_dict = {}
     in_model_section = False
 
-    with open(controller_path, 'r', encoding='utf-8') as f:
+    with open(controller_path, 'r', encoding='latin1') as f:
         for line in f:
             line = line.strip()
 
