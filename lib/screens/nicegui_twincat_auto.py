@@ -7,7 +7,12 @@ from lib.services.twincat_manager import TwinCATManager
 import asyncio
 from lib.services.opcua_tool import ConfigChangeHandler
 from lib.screens import state
-from lib.services.client import read_all_kanal_configs, read_audit_info, format_audit_source
+from lib.services.client import (
+    read_all_kanal_configs, 
+    read_audit_info, 
+    format_audit_source,
+    update_audit_from_client
+)
 from opcua import Client, ua
 from lib.services.TwinCAT_interface import collect_paths
 from dotenv import load_dotenv
@@ -169,7 +174,7 @@ def show_twincat_auto_page():
             if not opc_client:
                 append_log("Failed to connect to OPC UA Client.")
                 return
-
+            
             structure_key = "CNC Configuration"
             keyword = structure_map[structure_key]
             root_node = state.sysman.LookupTreeItem(keyword)
@@ -183,6 +188,16 @@ def show_twincat_auto_page():
             manager.read_trafo_from_all_kanals(read_all_kanal_configs(opc_client, state.kanal_inputs), available_paths)
             manager.read_all_axis_with_matching(read_all_kanal_configs(opc_client, state.kanal_inputs), available_paths)
             append_log("=== [Done] All parameters read ===")
+
+
+            current_modifier = modifier_input.value.strip() or "Unknown"
+            update_audit_from_client(
+                opc_client,
+                current_modifier,
+                "TwinCAT_Read_Operation",
+                "Read_from_TwinCAT"
+            )
+
         except Exception as e:
             append_log(f"[Error] Exception during full read: {e}")
 

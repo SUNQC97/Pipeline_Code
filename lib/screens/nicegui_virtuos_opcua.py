@@ -8,8 +8,9 @@ from nicegui import ui
 import asyncio
 from lib.screens.state import kanal_inputs
 from lib.services.opcua_tool import ConfigChangeHandler
-from lib.services.client import connect_opcua_client
+from lib.services.client import connect_opcua_client, read_audit_info, format_audit_source
 from lib.utils.save_to_file import save_opcua_data_to_file
+from datetime import datetime
 
 skip_write_back_in_virtuos = None
 
@@ -38,6 +39,9 @@ def show_virtuos_server():
         value="User1",
         placeholder="Enter your name or ID for audit trail"
     ).style("width: 200px; margin-bottom: 10px")
+
+
+    pending_panel = ui.column().style('gap:8px; width:100%')
 
     def get_current_modifier():
         return modifier_input.value.strip() or "Unknown_User"
@@ -230,14 +234,6 @@ def show_virtuos_server():
                 trafo_names, trafo_values = Virtuos_tool.extract_trafo_param_list(vz, path)
                 server.update_trafo_config(opc_server_instance, kanal, trafo_names, trafo_values)
 
-                server.update_audit_info(
-                    opc_server_instance,
-                    modifier_name,
-                    f"{kanal}/TrafoConfigJSON",
-                    "Refresh_byVirtuos_TrafoConfigJSON"
-                )
-
-
                 axis_params = Virtuos_tool.read_Value_Model_json(vz, path)[1]
                 axis_names, axis_values = Virtuos_tool.extract_axis_param_list(axis_params)
                 server.update_kanal_axis_config(opc_server_instance, kanal, "AxisConfigJSON", axis_names, axis_values)
@@ -245,8 +241,8 @@ def show_virtuos_server():
                 server.update_audit_info(
                     opc_server_instance, 
                     modifier_name, 
-                    f"{kanal}/AxisConfigJSON", 
-                    "Refresh_byVirtuos_AxisConfigJSON"
+                    "Refresh_TrafoConfigJSON & AxisConfigJSON", 
+                    "Refresh_byVirtuos"
                 )
                 await append_log(f"[OK] {kanal} refreshed from block {path}")
             
@@ -357,6 +353,89 @@ def show_virtuos_server():
         except Exception as e:
             await append_log(f"[EXCEPTION] Failed to stop server: {e}")
 
+        # Start OPC UA Client listener
+    
+    PENDING_CHANGES = {}
+
+
+
+    async def confirming_on_change():
+        global skip_write_back_in_TwinCAT
+        if skip_write_back_in_TwinCAT == "skip_once":
+            skip_write_back_in_TwinCAT = None
+            append_log("[INFO] Skipping write back to TwinCAT due to previous operation.")
+            return
+
+        # read audit info
+        audit_info = read_audit_info(opc_client)
+        
+        dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
+        load_dotenv(dotenv_path)
+        opc_host = os.getenv("SERVER_IP")
+        opc_port = os.getenv("SERVER_PORT")
+
+        #source = f"OPC UA {opc_host}:{opc_port}"
+        base_source = f"OPC UA {opc_host}:{opc_port}"
+        source = format_audit_source(base_source, audit_info)
+
+        # add log
+        if audit_info and audit_info.get('modifier') and audit_info.get('modifier') != 'Unknown':
+            append_log(f"[AUDIT] Found modifier: {audit_info.get('modifier')}")
+        else:
+            append_log("[AUDIT] No audit info or unknown modifier")
+            
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        change_id = f'change:{ts}'
+
+        old = PENDING_CHANGES.get(change_id)
+        if old and 'row' in old:
+            try:
+                old['row'].delete()
+            except:
+                pass
+
+
+        with pending_panel:
+            row = ui.row().style(
+                'align-items:center; gap:10px; border:1px solid #ddd; '
+                'padding:8px; border-radius:8px; width:100%'
+            )
+            with row:
+                # 时间信息
+                ui.label(f'Time: {ts}').style('font-weight:bold; flex-shrink:0')
+                
+                # 审计信息 - 占用剩余空间
+                if audit_info and audit_info.get('modifier') and audit_info.get('modifier') != 'Unknown':
+                    ui.label(f'Source: {source}').style('color: blue; font-weight: bold; flex-grow:1')
+                else:
+                    ui.label(f'Source: {source}').style('color: gray; flex-grow:1')
+
+                # 按钮组 - 放在同一行
+                with ui.row().style('gap: 8px; flex-shrink:0'):
+                    async def do_import():
+                        modifier_info = f" by {audit_info.get('modifier', 'Unknown')}" if audit_info else ""
+                        append_log(f'[CONFIRM] Import {change_id}{modifier_info}...')
+                        await write_back_all_from_opcua_server()
+                        append_log(f'[OK] Applied {change_id}')
+                        PENDING_CHANGES.pop(change_id, None)
+                        row.delete()
+
+                    def do_ignore():
+                        modifier_info = f" by {audit_info.get('modifier', 'Unknown')}" if audit_info else ""
+                        append_log(f'[INFO] Ignore {change_id}{modifier_info}')
+                        PENDING_CHANGES.pop(change_id, None)
+                        row.delete()
+
+                    ui.button('IMPORT', on_click=do_import, color='green').style('min-width: 80px')
+                    ui.button('IGNORE', on_click=do_ignore, color='red').style('min-width: 80px')
+
+        PENDING_CHANGES[change_id] = {
+            'id': change_id,
+            'time': ts,
+            'source': source,
+            'row': row
+        }
+
     async def start_opcua_server_listener():
         global opc_client
         nonlocal opc_subscription_started
@@ -371,7 +450,7 @@ def show_virtuos_server():
                 return
             opc_subscription = opc_client.create_subscription(
                 100,
-                ConfigChangeHandler(callback=write_back_all_from_opcua_server, loop=asyncio.get_running_loop())
+                ConfigChangeHandler(callback=confirming_on_change, loop=asyncio.get_running_loop())
             )
             for kanal in kanal_inputs.keys():
                 kanal_node = opc_client.get_objects_node().get_child([f"2:{kanal}"])
@@ -442,3 +521,7 @@ def show_virtuos_server():
     ui.button("Stop OPC UA Server Listener", on_click=stop_opcua_listener, color='grey')
     kanal_paths_container
     log_area
+    
+    
+    ui.label("Pending Changes").style("font-weight: bold; font-size: 16px; margin-top: 16px")
+    pending_panel
