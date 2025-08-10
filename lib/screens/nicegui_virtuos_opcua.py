@@ -360,10 +360,12 @@ def show_virtuos_server():
 
 
     async def confirming_on_change():
-        global skip_write_back_in_TwinCAT
-        if skip_write_back_in_TwinCAT == "skip_once":
-            skip_write_back_in_TwinCAT = None
-            append_log("[INFO] Skipping write back to TwinCAT due to previous operation.")
+        print("[debug] Confirming changes...")
+
+        global skip_write_back_in_virtuos
+        if skip_write_back_in_virtuos == "skip_once":
+            skip_write_back_in_virtuos = None
+            await append_log("[INFO] Skipping write back to Virtuos due to previous operation.")
             return
 
         # read audit info
@@ -380,10 +382,10 @@ def show_virtuos_server():
 
         # add log
         if audit_info and audit_info.get('modifier') and audit_info.get('modifier') != 'Unknown':
-            append_log(f"[AUDIT] Found modifier: {audit_info.get('modifier')}")
+            await append_log(f"[AUDIT] Found modifier: {audit_info.get('modifier')}")
         else:
-            append_log("[AUDIT] No audit info or unknown modifier")
-            
+            await append_log("[AUDIT] No audit info or unknown modifier")
+
         ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         change_id = f'change:{ts}'
 
@@ -414,9 +416,9 @@ def show_virtuos_server():
                 with ui.row().style('gap: 8px; flex-shrink:0'):
                     async def do_import():
                         modifier_info = f" by {audit_info.get('modifier', 'Unknown')}" if audit_info else ""
-                        append_log(f'[CONFIRM] Import {change_id}{modifier_info}...')
+                        await append_log(f'[CONFIRM] Import {change_id}{modifier_info}...')
                         await write_back_all_from_opcua_server()
-                        append_log(f'[OK] Applied {change_id}')
+                        await append_log(f'[OK] Applied {change_id}')
                         PENDING_CHANGES.pop(change_id, None)
                         row.delete()
 
@@ -450,8 +452,9 @@ def show_virtuos_server():
                 return
             opc_subscription = opc_client.create_subscription(
                 100,
-                ConfigChangeHandler(callback=confirming_on_change, loop=asyncio.get_running_loop())
+                ConfigChangeHandler(callback=confirming_on_change, loop=asyncio.get_running_loop(), delay_sec=1.0)
             )
+
             for kanal in kanal_inputs.keys():
                 kanal_node = opc_client.get_objects_node().get_child([f"2:{kanal}"])
                 for var_name in ["TrafoConfigJSON", "AxisConfigJSON"]:
@@ -499,8 +502,6 @@ def show_virtuos_server():
             "Manual_Audit_Update"
         )
         await append_log(f"[OK] Audit info manually updated by {modifier_name}")
-
-    ui.label("Virtuos → OPC UA Bridge").style("font-weight: bold; font-size: 20px;")
     
     # 审计信息输入和状态显示
     with ui.row().style("margin-bottom: 10px; gap: 12px; align-items: end"):
@@ -521,7 +522,6 @@ def show_virtuos_server():
     ui.button("Stop OPC UA Server Listener", on_click=stop_opcua_listener, color='grey')
     kanal_paths_container
     log_area
-    
-    
-    ui.label("Pending Changes").style("font-weight: bold; font-size: 16px; margin-top: 16px")
+    ui.separator()
+    ui.label("Pending Changes from External Sources").style("font-weight: bold; font-size: 16px; margin-top: 16px")
     pending_panel

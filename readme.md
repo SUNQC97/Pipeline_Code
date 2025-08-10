@@ -9,6 +9,9 @@ Problem:
 3.数据不同 # Definition of default axes group  这部分不太一样
 
 
+4. Skip once的逻辑有问题 要处理一下
+
+
 思路：
 1.把xml文件结构和轴号以及对应的kanal的号  传入write_xml_to_new_kanal/axis，先根据kanal的号修改default。（因为创建轴node的时候，默认的都是kanal_1）
 

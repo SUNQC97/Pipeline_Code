@@ -228,3 +228,32 @@ def get_audit_subscription_nodes(client: Client) -> list:
         print(f"[WARN] Could not get audit subscription nodes: {e}")
     
     return audit_nodes
+
+def update_audit_info_via_client(client: Client, modifier_name: str, modified_node: str = "", operation: str = "Parameter_Update", session_id: str = "") -> bool:
+    """
+    通过 OPC UA 客户端更新审计信息
+    """
+    try:
+        if not client:
+            print("[ERROR] No OPC UA client connection")
+            return False
+            
+        from datetime import datetime
+        
+        # 获取审计节点
+        root = client.get_root_node()
+        audit_node = root.get_child(["0:Objects", "2:AuditTrail"])
+        
+        # 更新审计信息
+        audit_node.get_child("2:LastModifier").set_value(modifier_name)
+        audit_node.get_child("2:LastModifiedTime").set_value(datetime.now().isoformat())
+        audit_node.get_child("2:LastModifiedNode").set_value(modified_node)
+        audit_node.get_child("2:LastOperation").set_value(operation)
+        audit_node.get_child("2:SessionID").set_value(session_id or f"Client_{datetime.now().strftime('%H%M%S')}")
+        
+        print(f"[AUDIT] Updated via client: modifier={modifier_name}, node={modified_node}, operation={operation}")
+        return True
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to update audit info via client: {e}")
+        return False

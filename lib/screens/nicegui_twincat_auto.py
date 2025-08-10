@@ -11,7 +11,7 @@ from lib.services.client import (
     read_all_kanal_configs, 
     read_audit_info, 
     format_audit_source,
-    update_audit_from_client
+    update_audit_info_via_client
 )
 from opcua import Client, ua
 from lib.services.TwinCAT_interface import collect_paths
@@ -191,7 +191,7 @@ def show_twincat_auto_page():
 
 
             current_modifier = modifier_input.value.strip() or "Unknown"
-            update_audit_from_client(
+            update_audit_info_via_client(
                 opc_client,
                 current_modifier,
                 "TwinCAT_Read_Operation",
@@ -203,8 +203,6 @@ def show_twincat_auto_page():
 
     # Start OPC UA Client listener
     PENDING_CHANGES = {}
-
-    
 
     async def confirming_on_change():
         global skip_write_back_in_TwinCAT
