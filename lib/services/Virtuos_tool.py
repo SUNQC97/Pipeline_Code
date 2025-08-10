@@ -267,25 +267,25 @@ def load_block_map() -> dict:
     block_path_dict = {}
     in_model_section = False
 
-    with open(controller_path, 'r', encoding='latin1') as f:
-        for line in f:
-            line = line.strip()
+    content = safe_open(controller_path)
+    for line in content.splitlines():
+        line = line.strip()
 
-            # Start capturing from the "Model uuids" section
-            if line.startswith("//Model uuids"):
-                in_model_section = True
-                continue
-            elif line.startswith("//Port uuids"):  # stop when Port uuids start
-                break
+        # Start capturing from the "Model uuids" section
+        if line.startswith("//Model uuids"):
+            in_model_section = True
+            continue
+        elif line.startswith("//Port uuids"):  # stop when Port uuids start
+            break
 
-            if in_model_section:
-                # Match = [Block Diagram].[xxx].[yyy] ;
-                match = re.search(r'=\s*(\[[^\]]+\](?:\.\[[^\]]+\])*)\s*;', line)
-                if match:
-                    full_path = match.group(1)
-                    block_name = full_path.split('.')[-1].strip('[]')
-                    block_path_dict[block_name] = full_path
-                    block_path_dict[f'[{block_name}]'] = full_path  # for names with brackets
+        if in_model_section:
+            # Match = [Block Diagram].[xxx].[yyy] ;
+            match = re.search(r'=\s*(\[[^\]]+\](?:\.\[[^\]]+\])*)\s*;', line)
+            if match:
+                full_path = match.group(1)
+                block_name = full_path.split('.')[-1].strip('[]')
+                block_path_dict[block_name] = full_path
+                block_path_dict[f'[{block_name}]'] = full_path  # with brackets
 
     return block_path_dict
 
@@ -329,3 +329,12 @@ def extract_controller_paths():
     
     # Convert the set back to a list if needed
     return list(controller_paths)
+
+def safe_open(filepath):
+    for encoding in ['utf-8', 'latin1']:
+        try:
+            with open(filepath, 'r', encoding=encoding) as f:
+                return f.read()
+        except UnicodeDecodeError:
+            continue
+    raise UnicodeDecodeError("Unable to decode file with utf-8 or latin1")

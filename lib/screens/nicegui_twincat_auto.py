@@ -8,15 +8,17 @@ import asyncio
 from lib.services.opcua_tool import ConfigChangeHandler
 from lib.screens import state
 from lib.services.client import read_all_kanal_configs, build_kanal_axis_structure
-from opcua import Client
+from opcua import Client, ua
 from lib.services.TwinCAT_interface import collect_paths
 from dotenv import load_dotenv
 import time
+from datetime import datetime
 
 skip_write_back_in_TwinCAT = None
 
+
 def show_twincat_auto_page():
-    
+
     structure_map = {
         "I/O Configuration": "TIIC",
         "I/O Devices": "TIID",
@@ -44,6 +46,8 @@ def show_twincat_auto_page():
 
     # Manager instance, log output to log_area
     log_area = ui.textarea(label='Log').props('readonly').style('width: 100%; height: 200px')
+
+    pending_panel = ui.column().style('gap:8px; width:100%')
 
     def append_log(text):
         log_area.value += text + '\n'
@@ -106,9 +110,6 @@ def show_twincat_auto_page():
                     append_log("Failed to connect OPC UA Client.")
                     return
 
-
-            #append_log("Browsing CNC structure...")
-
             # CNC Configuration is the root node
             structure_key = "CNC Configuration"
             keyword = structure_map[structure_key]
@@ -117,17 +118,12 @@ def show_twincat_auto_page():
             global available_paths
 
             available_paths = collect_paths(root_node, prefix=keyword)
-            
-            #append_log(f"Found {len(available_paths)} nodes.")
 
             if not available_paths:
                 append_log("[Abort] Failed to browse CNC structure.")
                 return
 
-            #append_log("Writing Trafo to all Kanal paths...")
             manager.apply_trafo_to_all_kanals(available_paths)
-
-            #append_log("Writing Axis with automatic matching...")
             manager.apply_all_axis_with_matching(available_paths)
 
             append_log("=== [Done] All parameters applied ===")
@@ -150,9 +146,8 @@ def show_twincat_auto_page():
             await asyncio.sleep(2)
             if skip_write_back_in_TwinCAT == "skip_once":
                 skip_write_back_in_TwinCAT = None
-                await append_log("[INFO] Resetting skip flag after 2 seconds.")
+                append_log("[INFO] Resetting skip flag after 2 seconds.")  
         asyncio.create_task(clear_skip_flag())
-
 
         append_log("=== [Start] One-click Read ===")
 
@@ -162,7 +157,6 @@ def show_twincat_auto_page():
                 if not state.sysman:
                     append_log("Failed to initialize TwinCAT project.")
                     return
-                
 
             if not opc_client:
                 manager.connect_client()
@@ -175,32 +169,73 @@ def show_twincat_auto_page():
             root_node = state.sysman.LookupTreeItem(keyword)
 
             available_paths = collect_paths(root_node, prefix=keyword)
-            #append_log(f"Found {len(available_paths)} nodes.")
 
             if not available_paths:
                 append_log("[Abort] Failed to browse CNC structure.")
                 return
 
-            # append_log("Step 1: Fetching base configs from OPC UA...")
-
-
-            #append_log("Step 2: Reading Trafo from TwinCAT...")
             manager.read_trafo_from_all_kanals(read_all_kanal_configs(opc_client, state.kanal_inputs), available_paths)
-
-            #append_log("Step 3: Reading Axis from TwinCAT...")
             manager.read_all_axis_with_matching(read_all_kanal_configs(opc_client, state.kanal_inputs), available_paths)
             append_log("=== [Done] All parameters read ===")
         except Exception as e:
             append_log(f"[Error] Exception during full read: {e}")
 
     # Start OPC UA Client listener
-    # This will listen for changes in the OPC UA server and trigger the callback
+    PENDING_CHANGES = {}
+
+    async def confirming_on_change():
+        global skip_write_back_in_TwinCAT
+        if skip_write_back_in_TwinCAT == "skip_once":
+            skip_write_back_in_TwinCAT = None
+            append_log("[INFO] Skipping write back to TwinCAT due to previous operation.")
+            return
+
+        source = f"OPC UA {opc_host}:{opc_port}"
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        change_id = f'change:{ts}'
+
+        old = PENDING_CHANGES.get(change_id)
+        if old and 'row' in old:
+            try:
+                old['row'].delete()
+            except:
+                pass
+
+        with pending_panel:
+            row = ui.row().style(
+                'align-items:center; gap:10px; border:1px solid #ddd; '
+                'padding:8px; border-radius:8px; width:100%'
+            )
+            with row:
+                ui.label(f'Time: {ts}').style('font-weight:bold')
+                ui.label(f'Source: {source}')
+
+                async def do_import():
+                    append_log(f'[CONFIRM] Import {change_id}...')
+                    await one_click_full_apply()
+                    append_log(f'[OK] Applied {change_id}')
+                    PENDING_CHANGES.pop(change_id, None)
+                    row.delete()
+
+                def do_ignore():
+                    append_log(f'[INFO] Ignore {change_id}')
+                    PENDING_CHANGES.pop(change_id, None)
+                    row.delete()
+
+                ui.button('Import', on_click=do_import, color='green')
+                ui.button('Ignore', on_click=do_ignore, color='red')
+
+        PENDING_CHANGES[change_id] = {
+            'id': change_id,
+            'time': ts,
+            'source': source,
+            'row': row
+        }
+    
     async def start_opcua_client_listener():
         nonlocal opc_client, opc_subscription_started
-        loop = asyncio.get_running_loop()
         
         init_sysman()
-
 
         if opc_subscription_started:
             append_log("[INFO] Listener already started.")
@@ -217,9 +252,14 @@ def show_twincat_auto_page():
         try:
             subscription = opc_client.create_subscription(
                 100,
-                ConfigChangeHandler(callback=one_click_full_apply, loop=asyncio.get_running_loop())
+                ConfigChangeHandler(
+                    callback=confirming_on_change,
+                    loop=asyncio.get_running_loop(),
+                    delay_sec=1.0
+                )
             )
 
+            # Data change subscription
             for kanal in state.kanal_inputs.keys():
                 kanal_node = opc_client.get_objects_node().get_child([f"2:{kanal}"])
                 for var_name in ["TrafoConfigJSON", "AxisConfigJSON"]:
@@ -231,7 +271,7 @@ def show_twincat_auto_page():
             listener_status_label.style('color: green; font-weight: bold;')
             opc_subscription_started = True
             append_log("[OK] OPC UA Client listener active.")
-
+            
         except Exception as e:
             append_log(f"[Error] OPC UA Listener failed: {e}")
 
@@ -254,3 +294,6 @@ def show_twincat_auto_page():
     ui.button("Stop OPC UA Listener", on_click=stop_opcua_client_listener, color='purple')
     listener_status_label
     log_area
+
+    ui.label("Pending Changes").style("font-weight: bold; font-size: 16px; margin-top: 16px")
+    pending_panel
