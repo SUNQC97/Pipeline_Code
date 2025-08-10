@@ -33,6 +33,15 @@ def show_virtuos_server():
     log_area = ui.textarea("Log Output").props('readonly').style('width: 100%; height: 200px')
     listener_status_label = ui.label("Listener : Stopped").style('color: red; font-weight: bold;')
 
+    modifier_input = ui.input(
+        label="Modifier Name",
+        value="User1",
+        placeholder="Enter your name or ID for audit trail"
+    ).style("width: 200px; margin-bottom: 10px")
+
+    def get_current_modifier():
+        return modifier_input.value.strip() or "Unknown_User"
+
     with ui.expansion("Block → Kanal Mapping", icon='link').style("width: 100%; max-width: 800px"):
         kanal_count = 1
         kanal_inputs.clear()
@@ -213,18 +222,34 @@ def show_virtuos_server():
                 await append_log("[ERROR] OPC UA Server is not running.")
                 return
 
+            modifier_name = get_current_modifier()
+
             for kanal, input_field in kanal_inputs.items():
                 path = input_field.value.strip()
 
                 trafo_names, trafo_values = Virtuos_tool.extract_trafo_param_list(vz, path)
                 server.update_trafo_config(opc_server_instance, kanal, trafo_names, trafo_values)
 
+                server.update_audit_info(
+                    opc_server_instance,
+                    modifier_name,
+                    f"{kanal}/TrafoConfigJSON",
+                    "Refresh_byVirtuos_TrafoConfigJSON"
+                )
+
+
                 axis_params = Virtuos_tool.read_Value_Model_json(vz, path)[1]
                 axis_names, axis_values = Virtuos_tool.extract_axis_param_list(axis_params)
                 server.update_kanal_axis_config(opc_server_instance, kanal, "AxisConfigJSON", axis_names, axis_values)
-
+                
+                server.update_audit_info(
+                    opc_server_instance, 
+                    modifier_name, 
+                    f"{kanal}/AxisConfigJSON", 
+                    "Refresh_byVirtuos_AxisConfigJSON"
+                )
                 await append_log(f"[OK] {kanal} refreshed from block {path}")
-
+            
             await append_log("[OK] All Kanals refreshed.")
 
         except Exception as e:
@@ -275,6 +300,8 @@ def show_virtuos_server():
 
 
         try:
+            modifier_name = get_current_modifier()
+
             for kanal, input_field in kanal_inputs.items():
                 block_path = input_field.value.strip()
 
@@ -292,6 +319,13 @@ def show_virtuos_server():
             opc_server_instance = server.start_opc_server_multi_kanal(kanal_data_dict)
             if opc_server_instance:
                 await append_log("[OK] Multi-Kanal OPC UA Server started.")
+                                # 初始化审计信息
+                server.update_audit_info(
+                    opc_server_instance, 
+                    modifier_name, 
+                    "Server_Initialization_Virtuos", 
+                    "Start_OPC_Server_Virtuos"
+                )
             else:
                 await append_log("[ERROR] Failed to start OPC UA server.")
             
@@ -304,6 +338,17 @@ def show_virtuos_server():
         global opc_server_instance
         try:
             if opc_server_instance:
+                
+                modifier_name = get_current_modifier()
+                
+                # 记录停止操作的审计信息
+                server.update_audit_info(
+                    opc_server_instance, 
+                    modifier_name, 
+                    "Server_Termination", 
+                    "Stop_OPC_Server"
+                )
+                
                 server.stop_opc_server(opc_server_instance)
                 await append_log("[OK] OPC UA Server stopped.")
                 opc_server_instance = None
@@ -361,6 +406,28 @@ def show_virtuos_server():
         kanal_data_dict = server.read_all_kanal_data_from_server_instance(opc_server_instance)
         save_opcua_data_to_file(kanal_data_dict)
 
+    # 添加手动更新审计信息的功能
+    async def manual_update_audit():
+        if not opc_server_instance:
+            await append_log("[ERROR] OPC UA Server is not running.")
+            return
+            
+        modifier_name = get_current_modifier()
+        server.update_audit_info(
+            opc_server_instance, 
+            modifier_name, 
+            "Manual_Update", 
+            "Manual_Audit_Update"
+        )
+        await append_log(f"[OK] Audit info manually updated by {modifier_name}")
+
+    ui.label("Virtuos → OPC UA Bridge").style("font-weight: bold; font-size: 20px;")
+    
+    # 审计信息输入和状态显示
+    with ui.row().style("margin-bottom: 10px; gap: 12px; align-items: end"):
+        modifier_input
+        ui.button("Update Audit Info", on_click=manual_update_audit, color='orange').style("height: 56px")
+        listener_status_label
 
     ui.label("Virtuos → OPC UA Bridge").style("font-weight: bold; font-size: 20px;")
     with ui.row().style("margin-bottom: 10px"):

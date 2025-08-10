@@ -2,6 +2,7 @@ from opcua import Server, ua
 from dotenv import load_dotenv
 import os
 import json
+from datetime import datetime
 
 def create_opc_server(kanal_names):
     """
@@ -26,7 +27,9 @@ def create_opc_server(kanal_names):
         kanal_node = objects.add_object(idx, kanal)
         kanal_nodes[kanal] = kanal_node
 
+    audit_node = create_audit_trail_node(objects, idx)
     print(f"[OK] OPC UA Server created at {url}")
+    
     return server, kanal_nodes, idx
 
 def add_kanal_config(kanal_node, idx, trafo_names, trafo_values, axis_names, axis_values):
@@ -131,6 +134,7 @@ def read_kanal_data_from_server_instance(server_instance, kanal_name):
         }
 
 def read_all_kanal_data_from_server_instance(server_instance):
+    
     result = {}
     kanal_nodes = server_instance.get_objects_node().get_children()
 
@@ -151,3 +155,81 @@ def read_all_kanal_data_from_server_instance(server_instance):
             continue
 
     return result
+
+def create_audit_trail_node(objects, idx):
+    """
+    Create an audit trail node for tracking changes.
+    """
+    try:
+        audit_node = objects.add_object(idx, "AuditTrail")
+
+
+        # add variables 
+        last_modifier_var = audit_node.add_variable(idx, "LastModifier", "Unknown", ua.VariantType.String)
+        last_modified_time_var = audit_node.add_variable(idx, "LastModifiedTime", "", ua.VariantType.String)
+        last_modified_node_var = audit_node.add_variable(idx, "LastModifiedNode", "", ua.VariantType.String)
+        last_operation_var = audit_node.add_variable(idx, "LastOperation", "", ua.VariantType.String)
+        session_id_var = audit_node.add_variable(idx, "SessionID", "", ua.VariantType.String)
+
+        # set writable
+        last_modifier_var.set_writable()
+        last_modified_time_var.set_writable()
+        last_modified_node_var.set_writable()
+        last_operation_var.set_writable()
+        session_id_var.set_writable()
+        
+
+        print(f"[OK] Audit trail node created successfully.")
+        return audit_node
+    except Exception as e:
+        print(f"[ERROR] Failed to create audit trail node: {e}")
+        return None
+
+def update_audit_info(server_instance, modifier_name, modified_node="", operation="Parameter_Update", session_id=""):
+    """
+    更新审计信息到 OPC UA 审计节点
+    """
+    try:
+        # 获取审计节点
+        audit_node = server_instance.get_objects_node().get_child("2:AuditTrail")
+        
+        # 更新审计信息
+        audit_node.get_child("2:LastModifier").set_value(modifier_name)
+        audit_node.get_child("2:LastModifiedTime").set_value(datetime.now().isoformat())
+        audit_node.get_child("2:LastModifiedNode").set_value(modified_node)
+        audit_node.get_child("2:LastOperation").set_value(operation)
+        audit_node.get_child("2:SessionID").set_value(session_id)
+        
+        print(f"[AUDIT] Updated: modifier={modifier_name}, node={modified_node}, operation={operation}")
+        return True
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to update audit info: {e}")
+        return False
+    
+def read_audit_info(server_instance):
+    """
+    从 OPC UA 服务器读取审计信息
+    """
+    try:
+        audit_node = server_instance.get_objects_node().get_child("2:AuditTrail")
+        
+        modifier = audit_node.get_child("2:LastModifier").get_value()
+        modified_time = audit_node.get_child("2:LastModifiedTime").get_value()
+        modified_node = audit_node.get_child("2:LastModifiedNode").get_value()
+        operation = audit_node.get_child("2:LastOperation").get_value()
+        session_id = audit_node.get_child("2:SessionID").get_value()
+        
+        return {
+            'modifier': modifier,
+            'modified_time': modified_time,
+            'modified_node': modified_node,
+            'operation': operation,
+            'session_id': session_id
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] Could not read audit info: {e}")
+        return None
+
+

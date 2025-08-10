@@ -7,7 +7,7 @@ from lib.services.twincat_manager import TwinCATManager
 import asyncio
 from lib.services.opcua_tool import ConfigChangeHandler
 from lib.screens import state
-from lib.services.client import read_all_kanal_configs, build_kanal_axis_structure
+from lib.services.client import read_all_kanal_configs, read_audit_info, format_audit_source
 from opcua import Client, ua
 from lib.services.TwinCAT_interface import collect_paths
 from dotenv import load_dotenv
@@ -46,6 +46,12 @@ def show_twincat_auto_page():
 
     # Manager instance, log output to log_area
     log_area = ui.textarea(label='Log').props('readonly').style('width: 100%; height: 200px')
+    
+    modifier_input = ui.input(
+        label="Modifier Name",
+        value="User1",
+        placeholder="Enter your name or ID for audit trail"
+    ).style("width: 200px; margin-bottom: 10px")
 
     pending_panel = ui.column().style('gap:8px; width:100%')
 
@@ -183,6 +189,8 @@ def show_twincat_auto_page():
     # Start OPC UA Client listener
     PENDING_CHANGES = {}
 
+    
+
     async def confirming_on_change():
         global skip_write_back_in_TwinCAT
         if skip_write_back_in_TwinCAT == "skip_once":
@@ -190,7 +198,20 @@ def show_twincat_auto_page():
             append_log("[INFO] Skipping write back to TwinCAT due to previous operation.")
             return
 
-        source = f"OPC UA {opc_host}:{opc_port}"
+        # read audit info
+        audit_info = read_audit_info(opc_client)
+
+
+        #source = f"OPC UA {opc_host}:{opc_port}"
+        base_source = f"OPC UA {opc_host}:{opc_port}"
+        source = format_audit_source(base_source, audit_info)
+
+        # add log
+        if audit_info and audit_info.get('modifier') and audit_info.get('modifier') != 'Unknown':
+            append_log(f"[AUDIT] Found modifier: {audit_info.get('modifier')}")
+        else:
+            append_log("[AUDIT] No audit info or unknown modifier")
+            
         ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         change_id = f'change:{ts}'
 
@@ -201,29 +222,40 @@ def show_twincat_auto_page():
             except:
                 pass
 
+
         with pending_panel:
             row = ui.row().style(
                 'align-items:center; gap:10px; border:1px solid #ddd; '
                 'padding:8px; border-radius:8px; width:100%'
             )
             with row:
-                ui.label(f'Time: {ts}').style('font-weight:bold')
-                ui.label(f'Source: {source}')
+                # 时间信息
+                ui.label(f'Time: {ts}').style('font-weight:bold; flex-shrink:0')
+                
+                # 审计信息 - 占用剩余空间
+                if audit_info and audit_info.get('modifier') and audit_info.get('modifier') != 'Unknown':
+                    ui.label(f'Source: {source}').style('color: blue; font-weight: bold; flex-grow:1')
+                else:
+                    ui.label(f'Source: {source}').style('color: gray; flex-grow:1')
 
-                async def do_import():
-                    append_log(f'[CONFIRM] Import {change_id}...')
-                    await one_click_full_apply()
-                    append_log(f'[OK] Applied {change_id}')
-                    PENDING_CHANGES.pop(change_id, None)
-                    row.delete()
+                # 按钮组 - 放在同一行
+                with ui.row().style('gap: 8px; flex-shrink:0'):
+                    async def do_import():
+                        modifier_info = f" by {audit_info.get('modifier', 'Unknown')}" if audit_info else ""
+                        append_log(f'[CONFIRM] Import {change_id}{modifier_info}...')
+                        await one_click_full_apply()
+                        append_log(f'[OK] Applied {change_id}')
+                        PENDING_CHANGES.pop(change_id, None)
+                        row.delete()
 
-                def do_ignore():
-                    append_log(f'[INFO] Ignore {change_id}')
-                    PENDING_CHANGES.pop(change_id, None)
-                    row.delete()
+                    def do_ignore():
+                        modifier_info = f" by {audit_info.get('modifier', 'Unknown')}" if audit_info else ""
+                        append_log(f'[INFO] Ignore {change_id}{modifier_info}')
+                        PENDING_CHANGES.pop(change_id, None)
+                        row.delete()
 
-                ui.button('Import', on_click=do_import, color='green')
-                ui.button('Ignore', on_click=do_ignore, color='red')
+                    ui.button('IMPORT', on_click=do_import, color='green').style('min-width: 80px')
+                    ui.button('IGNORE', on_click=do_ignore, color='red').style('min-width: 80px')
 
         PENDING_CHANGES[change_id] = {
             'id': change_id,
