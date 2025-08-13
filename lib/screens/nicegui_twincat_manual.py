@@ -7,7 +7,7 @@ from nicegui import ui
 from lib.screens import state
 import json
 from pathlib import Path
-from lib.screens.state import kanal_inputs
+from lib.screens.state import kanal_inputs_twincat  
 from lib.services.TwinCAT_interface import (
     init_project,
     export_cnc_node,
@@ -33,7 +33,8 @@ from lib.services.client import (
     fetch_trafo_json,
     fetch_axis_json,
     read_all_kanal_configs,
-    write_all_configs_to_opcua
+    write_all_configs_to_opcua,
+    fetch_kanal_inputs_from_opcua
 )
 from lib.services.opcua_tool import ConfigChangeHandler
 
@@ -88,9 +89,9 @@ def show_twincat_page():
     with open(mapping_path, "r", encoding="utf-8") as f:
         axis_mapping = json.load(f)
 
-    #available_kanals = list(axis_mapping.keys())
-
-    available_kanals = list(kanal_inputs.keys())
+    # 初始化为默认值，连接OPC UA后动态更新
+    available_kanals = [] 
+    kanal_inputs_twincat = {}
 
 
     def append_log(text: str):
@@ -254,8 +255,6 @@ def show_twincat_page():
         except Exception as e:
             append_log(f"Error during import: {e}")
 
-
-
     type_map = {
         "Axis": 401,
         "Kanal": 403
@@ -323,11 +322,24 @@ def show_twincat_page():
             if opc_client:
                 append_log("OPC Client is already connected.")
                 return
-            opc_client = connect_opcua_client()
-            if opc_client:
-                append_log("OPC Client connected successfully.")
-            else:
-                append_log("Failed to connect OPC Client.")
+            try:
+                opc_client = connect_opcua_client("user1", "pass1")  # 传递用户名密码
+                if opc_client:
+                    # 连接成功后动态获取 Kanal 列表
+                    nonlocal kanal_inputs_twincat, available_kanals
+                    kanal_inputs_twincat = fetch_kanal_inputs_from_opcua(opc_client)
+                    available_kanals = list(kanal_inputs_twincat.keys())
+                    
+                    # 更新下拉列表选项
+                    selected_kanal.options = available_kanals
+                    if available_kanals:
+                        selected_kanal.value = available_kanals[0]
+                    
+                    append_log(f"OPC Client connected successfully. Found {len(available_kanals)} Kanals: {available_kanals}")
+                else:
+                    append_log("Failed to connect OPC Client.")
+            except Exception as e:
+                append_log(f"Failed to connect OPC Client: {e}")
 
         def disconnect_client():
             nonlocal opc_client
@@ -385,7 +397,8 @@ def show_twincat_page():
                 print(f"Processing {path}")
 
                 try:
-                    all_configs = read_all_kanal_configs(opc_client, kanal_inputs)
+                    kanal_inputs_twincat = fetch_kanal_inputs_from_opcua(opc_client)
+                    all_configs = read_all_kanal_configs(opc_client, kanal_inputs_twincat)
                     if not all_configs:
                         append_log(f"[Warning] No configurations found for {path}. Skipping.")
                         continue
@@ -529,7 +542,8 @@ def show_twincat_page():
             failed = []
 
             # Pre-read all Kanal configurations once
-            all_configs = read_all_kanal_configs(opc_client, kanal_inputs)
+            kanal_inputs_twincat = fetch_kanal_inputs_from_opcua(opc_client)
+            all_configs = read_all_kanal_configs(opc_client, kanal_inputs_twincat)
             if not all_configs:
                 append_log("[Error] Failed to fetch Kanal configurations from OPC UA.")
                 return
@@ -688,12 +702,12 @@ def show_twincat_page():
 
             append_log("Step 1: Fetching base configs from OPC UA...")
 
-
+            kanal_inputs_twincat = fetch_kanal_inputs_from_opcua(opc_client)
             append_log("Step 2: Reading Trafo from TwinCAT...")
-            read_trafo_from_all_kanals(read_all_kanal_configs(opc_client, kanal_inputs))
+            read_trafo_from_all_kanals(read_all_kanal_configs(opc_client, kanal_inputs_twincat))
 
             append_log("Step 3: Reading Axis from TwinCAT...")
-            read_all_axis_from_twincat_with_matching(read_all_kanal_configs(opc_client, kanal_inputs))
+            read_all_axis_from_twincat_with_matching(read_all_kanal_configs(opc_client, kanal_inputs_twincat))
 
 
         except Exception as e:
@@ -716,9 +730,8 @@ def show_twincat_page():
                 100,
                 ConfigChangeHandler(one_click_full_apply, loop)
             )
-            
 
-            for kanal in kanal_inputs.keys():
+            for kanal in kanal_inputs_twincat.keys():
                 kanal_node = opc_client.get_objects_node().get_child([f"2:{kanal}"])
                 for var_name in ["TrafoConfigJSON", "AxisConfigJSON"]:
                     var_node = kanal_node.get_child([f"2:{var_name}"])

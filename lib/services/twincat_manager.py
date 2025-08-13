@@ -4,7 +4,7 @@ import re
 import json
 from pathlib import Path
 from lib.screens import state
-from lib.screens.state import kanal_inputs
+from lib.screens.state import kanal_inputs_twincat
 from lib.services.TwinCAT_interface import (
     init_project, export_cnc_node, import_cnc_node, handle_configuration,
     load_config, collect_paths, get_export_path, get_import_path,
@@ -15,7 +15,7 @@ from lib.services.TwinCAT_interface import (
 )
 from lib.services.client import (
     fetch_axis_json, convert_trafo_lines, write_all_configs_to_opcua,
-    read_all_kanal_configs, fetch_trafo_json
+    read_all_kanal_configs, fetch_trafo_json, fetch_kanal_inputs_from_opcua
 )
 import lib.services.client as client
 import asyncio
@@ -47,7 +47,6 @@ class TwinCATManager:
 
         self.available_paths = available_paths if available_paths is not None else []
         self.axis_mapping = self.load_axis_mapping()
-        self.kanal_inputs = kanal_inputs
 
     def log(self, message):
         self.logger(message)
@@ -252,7 +251,9 @@ class TwinCATManager:
         failed = []
 
         try:
-            all_configs = read_all_kanal_configs(self.opc_client, self.kanal_inputs)
+
+            kanal_inputs_twincat = fetch_kanal_inputs_from_opcua(self.opc_client)
+            all_configs = read_all_kanal_configs(self.opc_client, kanal_inputs_twincat)
         except Exception as e:
             self.log(f"[Error] Failed to read OPC UA config: {e}")
             return False
@@ -403,7 +404,8 @@ class TwinCATManager:
         self.log(f"[Info] Found {len(axis_paths_all)} Axis/Achse nodes.")
 
         try:
-            all_configs = read_all_kanal_configs(self.opc_client, self.kanal_inputs)
+            kanal_inputs_twincat = fetch_kanal_inputs_from_opcua(self.opc_client)
+            all_configs = read_all_kanal_configs(self.opc_client, kanal_inputs_twincat)
         except Exception as e:
             self.log(f"[Error] Failed to fetch OPC UA Kanal configs: {e}")
             return False

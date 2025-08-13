@@ -15,11 +15,16 @@ def connect_opcua_client(username=None, password=None) -> Client:
     client = Client(OPCUA_URL)
 
     client.set_security_string(f"Basic256Sha256,SignAndEncrypt,{client_cert},{client_key}") 
-
+    
     if username:
         client.set_user(username)
     if password:
         client.set_password(password)
+
+    if not username or not password:
+        raise ValueError("Username and password must be provided")
+        return
+    
     client.connect()
     print(f"Connected to OPC UA Server at {OPCUA_URL}")
     return client
@@ -31,6 +36,19 @@ def disconnect_opcua_client(client: Client):
             print("Disconnected from OPC UA Server")
         except Exception as e:
             print(f"Error disconnecting OPC UA client: {e}")
+
+def fetch_kanal_inputs_from_opcua(client: Client):
+    kanal_inputs_twincat = {}
+    try:
+        objects_node = client.get_root_node().get_child(["0:Objects"])
+        for kanal in objects_node.get_children():
+            kanal_name = kanal.get_browse_name().Name
+            # 过滤出以 Kanal 开头的节点
+            if kanal_name.startswith("Kanal") or kanal_name.startswith("Channel"):
+                kanal_inputs_twincat[kanal_name] = kanal_name  # 简单存储名称
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch Kanal_inputs from OPC UA: {e}")
+    return kanal_inputs_twincat
 
 def fetch_kanal_config_json(client: Client, kanal_name: str, param_type: str) -> dict:
     try:

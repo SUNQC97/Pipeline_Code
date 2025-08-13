@@ -1,5 +1,6 @@
 # lib/screens/state.py
 sysman = None
 
-# for example: kanal_inputs = {}
-kanal_inputs = {}
+kanal_inputs_virtuos = {} # get kanal from Virtuos
+
+kanal_inputs_twincat = {} # get kanal from TwinCAT

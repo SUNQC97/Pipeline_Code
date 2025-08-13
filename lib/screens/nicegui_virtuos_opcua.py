@@ -6,7 +6,7 @@ from lib.services import remote
 from lib.services import Virtuos_tool, server
 from nicegui import ui
 import asyncio
-from lib.screens.state import kanal_inputs
+from lib.screens.state import kanal_inputs_virtuos
 from lib.services.opcua_tool import ConfigChangeHandler
 from lib.services.client import connect_opcua_client, read_modifier_info, format_modifier_source
 from lib.utils.save_to_file import save_opcua_data_to_file
@@ -26,7 +26,7 @@ def show_virtuos_server():
     def show_kanal_paths():
         kanal_paths_container.clear()
         with kanal_paths_container:
-            for kanal_name, path_input in kanal_inputs.items():
+            for kanal_name, path_input in kanal_inputs_virtuos.items():
                 ui.label(f"{kanal_name}: → {path_input.value}").style("color: #333; padding: 2px 0")
                 
     kanal_paths_container = ui.column().style("margin-top: 10px")
@@ -38,7 +38,7 @@ def show_virtuos_server():
 
     with ui.expansion("Block → Kanal Mapping", icon='link').style("width: 100%; max-width: 800px"):
         kanal_count = 1
-        kanal_inputs.clear()
+        kanal_inputs_virtuos.clear()
         kanal_inputs_list = [] 
         kanal_container = ui.element('div')
 
@@ -87,7 +87,7 @@ def show_virtuos_server():
                     kanal_inputs_list.pop(i)
 
             # 先清空映射，稍后在 fill_all_paths 时更新
-            kanal_inputs.clear()
+            kanal_inputs_virtuos.clear()
 
         def on_kanal_count_change(e):
             nonlocal kanal_count
@@ -95,7 +95,7 @@ def show_virtuos_server():
             update_kanal_inputs()
 
         def fill_all_paths():
-            kanal_inputs.clear()
+            kanal_inputs_virtuos.clear()
             for kanal_name_field, path_input, dropdown in kanal_inputs_list:
                 kanal_name = kanal_name_field.value.strip()
                 selected_block = dropdown.value
@@ -111,7 +111,7 @@ def show_virtuos_server():
                     path_input.value = "Not Selected"
                     path_input.props("color=red")
 
-                kanal_inputs[kanal_name] = path_input
+                kanal_inputs_virtuos[kanal_name] = path_input
 
             show_kanal_paths()
 
@@ -216,7 +216,7 @@ def show_virtuos_server():
                 await append_log("[ERROR] OPC UA Server is not running.")
                 return
 
-            for kanal, input_field in kanal_inputs.items():
+            for kanal, input_field in kanal_inputs_virtuos.items():
                 path = input_field.value.strip()
 
                 trafo_names, trafo_values = Virtuos_tool.extract_trafo_param_list(vz, path)
@@ -252,7 +252,7 @@ def show_virtuos_server():
             return
 
         try:
-            for kanal, input_field in kanal_inputs.items():
+            for kanal, input_field in kanal_inputs_virtuos.items():
                 block_path = input_field.value.strip()
                 kanal_data = server.read_kanal_data_from_server_instance(opc_server_instance, kanal)
 
@@ -285,7 +285,7 @@ def show_virtuos_server():
 
         try:
 
-            for kanal, input_field in kanal_inputs.items():
+            for kanal, input_field in kanal_inputs_virtuos.items():
                 block_path = input_field.value.strip()
 
                 trafo_names, trafo_values = Virtuos_tool.extract_trafo_param_list(vz, block_path)
@@ -436,7 +436,7 @@ def show_virtuos_server():
                 ConfigChangeHandler(callback=confirming_on_change, loop=asyncio.get_running_loop(), delay_sec=1.0)
             )
 
-            for kanal in kanal_inputs.keys():
+            for kanal in kanal_inputs_virtuos.keys():
                 kanal_node = opc_client.get_objects_node().get_child([f"2:{kanal}"])
                 for var_name in ["TrafoConfigJSON", "AxisConfigJSON"]:
                     var_node = kanal_node.get_child([f"2:{var_name}"])

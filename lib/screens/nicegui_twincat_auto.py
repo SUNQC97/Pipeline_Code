@@ -12,7 +12,8 @@ from lib.services.client import (
     read_all_kanal_configs,
     read_modifier_info,
     format_modifier_source,
-    update_modifier_info_via_client
+    update_modifier_info_via_client,
+    fetch_kanal_inputs_from_opcua
 )
 from opcua import Client, ua
 from lib.services.TwinCAT_interface import collect_paths
@@ -28,34 +29,87 @@ import getpass
 skip_write_back_in_TwinCAT = None
 
 
-def show_twincat_auto_page():
+def show_twincat_auto_page():   
+    is_logged_in = False
+
     # 连接OPC UA按钮逻辑
     def connect_opcua():
-        nonlocal opc_client
+        nonlocal opc_client, is_logged_in
         username = opcua_username_input.value.strip()
         password = opcua_password_input.value
         print(f"Connecting to OPC UA with username: {username}")
         print(f"Password: {password}")
+
+        if not username or not password:
+            login_status_label.text = "please fill in username and password"
+            login_status_label.style('color: red; font-weight: bold;')
+            return
         try:
             opc_client = connect_opcua_client(username, password)
             manager.opc_client = opc_client
+            is_logged_in = True
             login_status_label.text = f"Logged in as: {username}" if username else "Connected"
+            login_status_label.style('color: green; font-weight: bold;')
             append_log(f"[OK] Connected to OPC UA as {username if username else 'Anonymous'}")
+            
+            # 登录成功后启用操作按钮
+            enable_operation_buttons(True)
+            
         except Exception as e:
+            is_logged_in = False
+            opc_client = None
             login_status_label.text = f"Login failed: {e}"
+            login_status_label.style('color: red; font-weight: bold;')
             append_log(f"[ERROR] OPC UA login failed: {e}")
+            
+            # 登录失败时保持操作按钮禁用
+            enable_operation_buttons(False)
+            return
 
+    def disconnect_opcua():
+        nonlocal opc_client, is_logged_in
+        try:
+            if opc_client:
+                opc_client.disconnect()
+                append_log("[OK] Disconnected from OPC UA server")
+            else:
+                append_log("[INFO] No active OPC UA connection to disconnect")
+
+            opc_client = None
+            manager.opc_client = None
+            is_logged_in = False
+            login_status_label.text = "Disconnected"
+            login_status_label.style('color: gray; font-weight: bold;')
+
+            # 断开连接后禁用操作按钮
+            enable_operation_buttons(False)
+
+        except Exception as e:
+            append_log(f"[ERROR] Error disconnecting from OPC UA: {e}")
+
+    def enable_operation_buttons(enabled):
+        init_button.enabled = enabled
+        one_click_apply_button.enabled = enabled
+        one_click_read_button.enabled = enabled
+        start_listener_button.enabled = enabled
+        stop_listener_button.enabled = enabled
+        connect_button.enabled = not enabled
+        disconnect_button.enabled = enabled
 
     # OPC UA 登录表单
     with ui.row().style('margin-bottom: 16px; gap: 12px; align-items: end'):
         opcua_username_input = ui.input('OPC UA Username', value='', placeholder='Enter username').style('width: 180px')
         opcua_password_input = ui.input('OPC UA Password', value='', password=True, placeholder='Enter password').style('width: 180px')
         login_status_label = ui.label('').style('color: gray; font-weight: bold;')
-    
+
+    #username and password read from .env
+    opcua_username_input.value = os.getenv("client_username", "")
+    opcua_password_input.value = os.getenv("client_password", "")
+
     def get_modifier(client: Client):
         # Prefer to use client username
         try:
-            client_username = client.get_user_name()
+            client_username = opcua_username_input.value.strip()
             if client_username:
                 client_username = client_username + " (Client_User)"
                 return client_username
@@ -166,6 +220,7 @@ def show_twincat_auto_page():
                 password = opcua_password_input.value
                 try:
                     opc_client = connect_opcua_client(username, password)
+
                     manager.opc_client = opc_client
                     login_status_label.text = f"Logged in as: {username}" if username else "Connected"
                 except Exception as e:
@@ -243,8 +298,9 @@ def show_twincat_auto_page():
                 append_log("[Abort] Failed to browse CNC structure.")
                 return
 
-            manager.read_trafo_from_all_kanals(read_all_kanal_configs(opc_client, state.kanal_inputs), available_paths)
-            manager.read_all_axis_with_matching(read_all_kanal_configs(opc_client, state.kanal_inputs), available_paths)
+            kanal_inputs_twincat = fetch_kanal_inputs_from_opcua(opc_client)
+            manager.read_trafo_from_all_kanals(read_all_kanal_configs(opc_client, kanal_inputs_twincat), available_paths)
+            manager.read_all_axis_with_matching(read_all_kanal_configs(opc_client, kanal_inputs_twincat), available_paths)
             append_log("=== [Done] All parameters read ===")
 
 
@@ -337,20 +393,27 @@ def show_twincat_auto_page():
     
     async def start_opcua_client_listener():
         nonlocal opc_client, opc_subscription_started
-        
-        init_sysman()
+
+        if not state.sysman:
+            init_sysman()
+            if not state.sysman:
+                append_log("[ERROR] TwinCAT system manager not initialized.")
+                return
 
         if opc_subscription_started:
             append_log("[INFO] Listener already started.")
             return  
         
         if not opc_client:
-            manager.connect_client()
-            opc_client = manager.opc_client
-            if not opc_client:
-                append_log("Failed to connect OPC UA Client.")
+            username = opcua_username_input.value.strip()
+            password = opcua_password_input.value
+            try:
+                manager.opc_client = opc_client
+                login_status_label.text = f"Logged in as: {username}" if username else "Connected"
+            except Exception as e:
+                login_status_label.text = f"Login failed: {e}"
+                append_log(f"[ERROR] OPC UA login failed: {e}")
                 return
-            append_log("OPC UA Client connected.")
 
         try:
             subscription = opc_client.create_subscription(
@@ -363,7 +426,8 @@ def show_twincat_auto_page():
             )
 
             # Data change subscription
-            for kanal in state.kanal_inputs.keys():
+            kanal_inputs_twincat = fetch_kanal_inputs_from_opcua(opc_client)
+            for kanal in kanal_inputs_twincat.keys():
                 kanal_node = opc_client.get_objects_node().get_child([f"2:{kanal}"])
                 for var_name in ["TrafoConfigJSON", "AxisConfigJSON"]:
                     var_node = kanal_node.get_child([f"2:{var_name}"])
@@ -385,19 +449,24 @@ def show_twincat_auto_page():
             listener_status_label.text = "Listener : Stopped"
             listener_status_label.style('color: red; font-weight: bold;')
             append_log("[INFO] OPC UA listener manually marked as stopped.")
+            disconnect_opcua()
         else:
             append_log("[INFO] No active listener to stop.")
+            disconnect_opcua()
 
     # Only auto/one-click operations
     ui.label("TwinCAT Auto Operations").style("font-weight: bold; font-size: 20px;")
-    ui.button("连接OPC UA", on_click=connect_opcua, color='blue').style('width: 180px')
-    ui.button("Initialize TwinCAT Project", on_click=init_sysman).style("width: 100%")
-    ui.button("One-click CNC Init + Write", on_click=one_click_full_apply, color='primary').props('raised')
-    ui.button("One-click Read", on_click=one_click_full_read, color='primary').props('raised')
-    ui.button("Start OPC UA Listener", on_click=start_opcua_client_listener, color='purple')
-    ui.button("Stop OPC UA Listener", on_click=stop_opcua_client_listener, color='purple')
+    connect_button = ui.button("Connect to OPCUA", on_click=connect_opcua, color='blue').style('width: 180px')
+    disconnect_button = ui.button("Disconnect OPCUA", on_click=disconnect_opcua, color='red').style('width: 180px')
+    init_button = ui.button("Initialize TwinCAT Project", on_click=init_sysman).style('width: 180px')
+    one_click_apply_button = ui.button("One-click CNC Init + Write", on_click=one_click_full_apply, color='primary').props('raised')
+    one_click_read_button = ui.button("One-click Read", on_click=one_click_full_read, color='primary').props('raised')
+    start_listener_button = ui.button("Start OPC UA Listener and OPCUA", on_click=start_opcua_client_listener, color='purple')
+    stop_listener_button = ui.button("Stop OPC UA Listener and OPCUA", on_click=stop_opcua_client_listener, color='purple')
+    
+    # 初始化按钮状态
+    enable_operation_buttons(False)  # 初始时禁用所有操作按钮
+    
     listener_status_label
     log_area
-
-    ui.label("Pending Changes").style("font-weight: bold; font-size: 16px; margin-top: 16px")
     pending_panel
