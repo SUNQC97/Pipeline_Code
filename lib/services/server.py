@@ -5,6 +5,9 @@ from opcua.server.user_manager import UserManager
 import json
 from datetime import datetime
 
+
+
+
 users_db = {
     "user1": "pass1",
     "user2": "pass2"

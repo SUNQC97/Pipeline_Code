@@ -4,17 +4,18 @@ from opcua import Client
 from lib.utils.save_to_file import save_structure_to_file
 
 
+
 def connect_opcua_client(username=None, password=None) -> Client:
     OPCUA_URL = f"opc.tcp://{os.getenv('SERVER_IP')}:{os.getenv('SERVER_PORT')}"
-    client = Client(OPCUA_URL)
 
     cert_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", "opcua_certs"))
-    client.set_security_string(
-        f"Basic256Sha256,SignAndEncrypt,"
-        f"{os.path.join(cert_dir, 'client_cert.der')},"
-        f"{os.path.join(cert_dir, 'client_key.pem')},"
-        f"{os.path.join(cert_dir, 'server_cert.der')}"
-    )  
+    client_cert = os.path.join(cert_dir, "client_cert.pem")   
+    client_key  = os.path.join(cert_dir, "client_key.pem")
+
+    client = Client(OPCUA_URL)
+
+    client.set_security_string(f"Basic256Sha256,SignAndEncrypt,{client_cert},{client_key}") 
+
     if username:
         client.set_user(username)
     if password:
