@@ -11,12 +11,13 @@ from datetime import datetime
 users_db = {
     "user1": "pass1",
     "user2": "pass2",
-    "admin": "admin123"
+    "admin": "admin123",
+    "server_inter": "interpass"
 }
 
 online_users = []
 
-log_callback = NotImplemented
+log_callback = None
 
 def set_log_callback(callback_func):
     global log_callback
@@ -29,24 +30,22 @@ def log_message(message):
         print(message)  
 
 def user_manager(isession, username, password):
-    isession.user = UserManager.User
-
     if username in users_db and password == users_db[username]:
-        isession.user = UserManager.User(username, password)
+        isession.user = UserManager.User
+        
         if username not in online_users:
             online_users.append(username)
 
         log_message(f"user '{username}' login successful!")
         log_message(f"Current online users: {online_users}")
         return True
-
-    log_message(f"user '{username}' login failed!")
-    return False
+    else:
+        log_message(f"user '{username}' login failed!")
+        return False
 
     # return username in users_db and password == users_db[username]
 
 def show_online_users():
-    """显示当前在线用户"""
     if online_users:
         log_message(f"online user({len(online_users)}): {', '.join(online_users)}")
     else:

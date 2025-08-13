@@ -140,6 +140,14 @@ def show_virtuos_server():
         log_area.update()
         await asyncio.sleep(0.05)
 
+    def server_log_callback(message):
+        timestamp = datetime.now().strftime('%H:%M:%S')
+        current_text = log_area.value or ""
+        new_text = f"[{timestamp}] [SERVER] {message}\n"
+        log_area.value = current_text + new_text
+
+    server.set_log_callback(server_log_callback)
+
     async def check_virtuos_and_opc_server():
         if not vz:
             await append_log("[ERROR] Virtuos is not initialized.")
@@ -427,7 +435,9 @@ def show_virtuos_server():
             return
         try:
             loop = asyncio.get_event_loop()
-            opc_client = connect_opcua_client()
+            username = "server_inter" if "server_inter" in server.users_db else list(server.users_db.keys())[0]
+            password = server.users_db[username]
+            opc_client = connect_opcua_client(username, password)
             if not opc_client:
                 await append_log("[ERROR] Failed to connect OPC UA client.")
                 return
@@ -481,6 +491,7 @@ def show_virtuos_server():
     ui.button("Write Back All from OPC UA Server", on_click=write_back_all_from_opcua_server, color='orange')
     ui.button("Start OPC UA Server Listener", on_click=start_opcua_server_listener, color='teal')
     ui.button("Stop OPC UA Server Listener", on_click=stop_opcua_listener, color='grey')
+    ui.button("Show Online Users", on_click=server.show_online_users, color='purple')
     kanal_paths_container
     log_area
     ui.separator()
