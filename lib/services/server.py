@@ -10,12 +10,47 @@ from datetime import datetime
 
 users_db = {
     "user1": "pass1",
-    "user2": "pass2"
+    "user2": "pass2",
+    "admin": "admin123"
 }
+
+online_users = []
+
+log_callback = NotImplemented
+
+def set_log_callback(callback_func):
+    global log_callback
+    log_callback = callback_func
+
+def log_message(message):
+    if log_callback:
+        log_callback(message)
+    else:
+        print(message)  
 
 def user_manager(isession, username, password):
     isession.user = UserManager.User
-    return username in users_db and password == users_db[username]
+
+    if username in users_db and password == users_db[username]:
+        isession.user = UserManager.User(username, password)
+        if username not in online_users:
+            online_users.append(username)
+
+        log_message(f"user '{username}' login successful!")
+        log_message(f"Current online users: {online_users}")
+        return True
+
+    log_message(f"user '{username}' login failed!")
+    return False
+
+    # return username in users_db and password == users_db[username]
+
+def show_online_users():
+    """显示当前在线用户"""
+    if online_users:
+        log_message(f"online user({len(online_users)}): {', '.join(online_users)}")
+    else:
+        log_message("Now no online user")
 
 def create_opc_server(kanal_names):
     """
@@ -64,7 +99,7 @@ def create_opc_server(kanal_names):
 
     print(f"[OK] OPC UA Server created at {url}")
     return server, kanal_nodes, idx
-
+ 
 def add_kanal_config(kanal_node, idx, trafo_names, trafo_values, axis_names, axis_values):
     """
     Add Trafo and Axis config variables to a specific Kanal/Channel node.
