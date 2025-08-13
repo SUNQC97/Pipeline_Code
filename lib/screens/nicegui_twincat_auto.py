@@ -8,21 +8,74 @@ import asyncio
 from lib.services.opcua_tool import ConfigChangeHandler
 from lib.screens import state
 from lib.services.client import (
-    read_all_kanal_configs, 
-    read_audit_info, 
-    format_audit_source,
-    update_audit_info_via_client
+    connect_opcua_client,
+    read_all_kanal_configs,
+    read_modifier_info,
+    format_modifier_source,
+    update_modifier_info_via_client
 )
 from opcua import Client, ua
 from lib.services.TwinCAT_interface import collect_paths
 from dotenv import load_dotenv
 import time
+import socket
+import getpass
 from datetime import datetime
+import socket
+import getpass
+
 
 skip_write_back_in_TwinCAT = None
 
 
 def show_twincat_auto_page():
+    # 连接OPC UA按钮逻辑
+    def connect_opcua():
+        nonlocal opc_client
+        username = opcua_username_input.value.strip()
+        password = opcua_password_input.value
+        print(f"Connecting to OPC UA with username: {username}")
+        print(f"Password: {password}")
+        try:
+            opc_client = connect_opcua_client(username, password)
+            manager.opc_client = opc_client
+            login_status_label.text = f"Logged in as: {username}" if username else "Connected"
+            append_log(f"[OK] Connected to OPC UA as {username if username else 'Anonymous'}")
+        except Exception as e:
+            login_status_label.text = f"Login failed: {e}"
+            append_log(f"[ERROR] OPC UA login failed: {e}")
+
+
+    # OPC UA 登录表单
+    with ui.row().style('margin-bottom: 16px; gap: 12px; align-items: end'):
+        opcua_username_input = ui.input('OPC UA Username', value='', placeholder='Enter username').style('width: 180px')
+        opcua_password_input = ui.input('OPC UA Password', value='', password=True, placeholder='Enter password').style('width: 180px')
+        login_status_label = ui.label('').style('color: gray; font-weight: bold;')
+    
+    def get_modifier(client: Client):
+        # Prefer to use client username
+        try:
+            client_username = client.get_user_name()
+            if client_username:
+                client_username = client_username + " (Client_User)"
+                return client_username
+        except Exception:
+            pass
+        # if not found, use system username
+        try:
+            system_username = getpass.getuser()
+            system_username = system_username + " (System_User)"
+            if system_username:
+                return system_username
+        except Exception:
+            pass
+        # if not found, use hostname and IP
+        try:
+            hostname = socket.gethostname()
+            ip = socket.gethostbyname(hostname)
+            return f"{hostname} ({ip})"
+        except Exception:
+            return "UnknownHost"
 
     structure_map = {
         "I/O Configuration": "TIIC",
@@ -51,12 +104,6 @@ def show_twincat_auto_page():
 
     # Manager instance, log output to log_area
     log_area = ui.textarea(label='Log').props('readonly').style('width: 100%; height: 200px')
-    
-    modifier_input = ui.input(
-        label="Modifier Name",
-        value="User1",
-        placeholder="Enter your name or ID for audit trail"
-    ).style("width: 200px; margin-bottom: 10px")
 
     pending_panel = ui.column().style('gap:8px; width:100%')
 
@@ -115,10 +162,15 @@ def show_twincat_auto_page():
                     return
 
             if not opc_client:
-                manager.connect_client()
-                opc_client = manager.opc_client
-                if not manager.opc_client:
-                    append_log("Failed to connect OPC UA Client.")
+                username = opcua_username_input.value.strip()
+                password = opcua_password_input.value
+                try:
+                    opc_client = connect_opcua_client(username, password)
+                    manager.opc_client = opc_client
+                    login_status_label.text = f"Logged in as: {username}" if username else "Connected"
+                except Exception as e:
+                    login_status_label.text = f"Login failed: {e}"
+                    append_log(f"[ERROR] OPC UA login failed: {e}")
                     return
 
             # CNC Configuration is the root node
@@ -170,10 +222,16 @@ def show_twincat_auto_page():
                     return
 
             if not opc_client:
-                manager.connect_client()
-            if not opc_client:
-                append_log("Failed to connect to OPC UA Client.")
-                return
+                username = opcua_username_input.value.strip()
+                password = opcua_password_input.value
+                try:
+                    opc_client = connect_opcua_client(username, password)
+                    manager.opc_client = opc_client
+                    login_status_label.text = f"Logged in as: {username}" if username else "Connected"
+                except Exception as e:
+                    login_status_label.text = f"Login failed: {e}"
+                    append_log(f"[ERROR] OPC UA login failed: {e}")
+                    return
             
             structure_key = "CNC Configuration"
             keyword = structure_map[structure_key]
@@ -190,8 +248,8 @@ def show_twincat_auto_page():
             append_log("=== [Done] All parameters read ===")
 
 
-            current_modifier = modifier_input.value.strip() or "Unknown"
-            update_audit_info_via_client(
+            current_modifier = get_modifier(opc_client)
+            update_modifier_info_via_client(
                 opc_client,
                 current_modifier,
                 "TwinCAT_Read_Operation",
@@ -211,20 +269,20 @@ def show_twincat_auto_page():
             append_log("[INFO] Skipping write back to TwinCAT due to previous operation.")
             return
 
-        # read audit info
-        audit_info = read_audit_info(opc_client)
+        # read modifier info
+        modifier_info = read_modifier_info(opc_client)
 
 
         #source = f"OPC UA {opc_host}:{opc_port}"
         base_source = f"OPC UA {opc_host}:{opc_port}"
-        source = format_audit_source(base_source, audit_info)
+        source = format_modifier_source(base_source, modifier_info)
 
         # add log
-        if audit_info and audit_info.get('modifier') and audit_info.get('modifier') != 'Unknown':
-            append_log(f"[AUDIT] Found modifier: {audit_info.get('modifier')}")
+        if modifier_info and modifier_info.get('modifier') and modifier_info.get('modifier') != 'Unknown':
+            append_log(f"[Modifier Info] Found modifier: {modifier_info.get('modifier')}")
         else:
-            append_log("[AUDIT] No audit info or unknown modifier")
-            
+            append_log("[Modifier Info] No modifier info or unknown modifier")
+
         ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         change_id = f'change:{ts}'
 
@@ -246,7 +304,7 @@ def show_twincat_auto_page():
                 ui.label(f'Time: {ts}').style('font-weight:bold; flex-shrink:0')
                 
                 # 审计信息 - 占用剩余空间
-                if audit_info and audit_info.get('modifier') and audit_info.get('modifier') != 'Unknown':
+                if modifier_info and modifier_info.get('modifier') and modifier_info.get('modifier') != 'Unknown':
                     ui.label(f'Source: {source}').style('color: blue; font-weight: bold; flex-grow:1')
                 else:
                     ui.label(f'Source: {source}').style('color: gray; flex-grow:1')
@@ -254,16 +312,16 @@ def show_twincat_auto_page():
                 # 按钮组 - 放在同一行
                 with ui.row().style('gap: 8px; flex-shrink:0'):
                     async def do_import():
-                        modifier_info = f" by {audit_info.get('modifier', 'Unknown')}" if audit_info else ""
-                        append_log(f'[CONFIRM] Import {change_id}{modifier_info}...')
+                        info_str = f" by {modifier_info.get('modifier', 'Unknown')}" if modifier_info else ""
+                        append_log(f'[CONFIRM] Import {change_id}{info_str}...')
                         await one_click_full_apply()
                         append_log(f'[OK] Applied {change_id}')
                         PENDING_CHANGES.pop(change_id, None)
                         row.delete()
 
                     def do_ignore():
-                        modifier_info = f" by {audit_info.get('modifier', 'Unknown')}" if audit_info else ""
-                        append_log(f'[INFO] Ignore {change_id}{modifier_info}')
+                        info_str = f" by {modifier_info.get('modifier', 'Unknown')}" if modifier_info else ""
+                        append_log(f'[INFO] Ignore {change_id}{info_str}')
                         PENDING_CHANGES.pop(change_id, None)
                         row.delete()
 
@@ -332,6 +390,7 @@ def show_twincat_auto_page():
 
     # Only auto/one-click operations
     ui.label("TwinCAT Auto Operations").style("font-weight: bold; font-size: 20px;")
+    ui.button("连接OPC UA", on_click=connect_opcua, color='blue').style('width: 180px')
     ui.button("Initialize TwinCAT Project", on_click=init_sysman).style("width: 100%")
     ui.button("One-click CNC Init + Write", on_click=one_click_full_apply, color='primary').props('raised')
     ui.button("One-click Read", on_click=one_click_full_read, color='primary').props('raised')

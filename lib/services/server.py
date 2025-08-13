@@ -1,8 +1,18 @@
-from opcua import Server, ua
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
+from opcua import ua, Server
+from opcua.server.user_manager import UserManager
 import json
 from datetime import datetime
+
+users_db = {
+    "user1": "pass1",
+    "user2": "pass2"
+}
+
+def user_manager(isession, username, password):
+    isession.user = UserManager.User
+    return username in users_db and password == users_db[username]
 
 def create_opc_server(kanal_names):
     """
@@ -11,25 +21,45 @@ def create_opc_server(kanal_names):
     dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
     load_dotenv(dotenv_path)
 
-    host = os.getenv("SERVER_IP")
-    port = os.getenv("SERVER_PORT")
+    host = os.getenv("SERVER_IP", "0.0.0.0")
+    port = int(os.getenv("SERVER_PORT", "4840"))
     url = f"opc.tcp://{host}:{port}"
 
     server = Server()
     server.set_endpoint(url)
     server.set_server_name("TwinCAT OPC UA Server")
-    idx = server.register_namespace("http://example.org/")
 
-    objects = server.get_objects_node()
-    kanal_nodes = {}
+    uri = "urn:opcua:python:server"
+    server.set_application_uri(uri)
 
-    for kanal in kanal_names:
-        kanal_node = objects.add_object(idx, kanal)
-        kanal_nodes[kanal] = kanal_node
+    cert_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", "opcua_certs"))
+    server.load_certificate(os.path.join(cert_dir, "server_cert.pem"))
+    server.load_private_key(os.path.join(cert_dir, "server_key.pem"))
+    server.set_security_policy([
+                                # ua.SecurityPolicyType.NoSecurity,
+                                # ua.SecurityPolicyType.Basic128Rsa15_Sign,
+                                # ua.SecurityPolicyType.Basic128Rsa15_SignAndEncrypt,
+                                # ua.SecurityPolicyType.Basic256Sha256_Sign,
+                                ua.SecurityPolicyType.Basic256Sha256_SignAndEncrypt
+                            ])
 
-    audit_node = create_audit_trail_node(objects, idx)
-    print(f"[OK] OPC UA Server created at {url}")
+    policyIDs = ["Username"]
+    server.set_security_IDs(policyIDs)
+    server.user_manager.set_user_manager(user_manager)
     
+
+    # 命名空间 & 对象树
+    idx = server.register_namespace("http://example.org/")
+    objects = server.get_objects_node()
+
+    kanal_nodes = {}
+    for kanal in kanal_names:
+        kanal_nodes[kanal] = objects.add_object(idx, kanal)
+
+    # 你的自定义节点构建（只做建树，不做会话操作）
+    modifier_node = create_modifier_trail_node(objects, idx)
+
+    print(f"[OK] OPC UA Server created at {url}")
     return server, kanal_nodes, idx
 
 def add_kanal_config(kanal_node, idx, trafo_names, trafo_values, axis_names, axis_values):
@@ -156,20 +186,19 @@ def read_all_kanal_data_from_server_instance(server_instance):
 
     return result
 
-def create_audit_trail_node(objects, idx):
+def create_modifier_trail_node(objects, idx):
     """
-    Create an audit trail node for tracking changes.
+    Create an modifier trail node for tracking changes.
     """
     try:
-        audit_node = objects.add_object(idx, "AuditTrail")
+        modifier_node = objects.add_object(idx, "ModifierTrail")
 
-
-        # add variables 
-        last_modifier_var = audit_node.add_variable(idx, "LastModifier", "Unknown", ua.VariantType.String)
-        last_modified_time_var = audit_node.add_variable(idx, "LastModifiedTime", "", ua.VariantType.String)
-        last_modified_node_var = audit_node.add_variable(idx, "LastModifiedNode", "", ua.VariantType.String)
-        last_operation_var = audit_node.add_variable(idx, "LastOperation", "", ua.VariantType.String)
-        session_id_var = audit_node.add_variable(idx, "SessionID", "", ua.VariantType.String)
+        # add variables
+        last_modifier_var = modifier_node.add_variable(idx, "LastModifier", "Unknown", ua.VariantType.String)
+        last_modified_time_var = modifier_node.add_variable(idx, "LastModifiedTime", "", ua.VariantType.String)
+        last_modified_node_var = modifier_node.add_variable(idx, "LastModifiedNode", "", ua.VariantType.String)
+        last_operation_var = modifier_node.add_variable(idx, "LastOperation", "", ua.VariantType.String)
+        session_id_var = modifier_node.add_variable(idx, "SessionID", "", ua.VariantType.String)
 
         # set writable
         last_modifier_var.set_writable()
@@ -179,47 +208,47 @@ def create_audit_trail_node(objects, idx):
         session_id_var.set_writable()
         
 
-        print(f"[OK] Audit trail node created successfully.")
-        return audit_node
+        print(f"[OK] Modifier trail node created successfully.")
+        return modifier_node
     except Exception as e:
-        print(f"[ERROR] Failed to create audit trail node: {e}")
+        print(f"[ERROR] Failed to create modifier trail node: {e}")
         return None
 
-def update_audit_info(server_instance, modifier_name, modified_node="", operation="Parameter_Update", session_id=""):
+def update_modifier_info(server_instance, modifier_name, modified_node="", operation="Parameter_Update", session_id=""):
     """
-    更新审计信息到 OPC UA 审计节点
+    更新修改者信息到 OPC UA 修改者节点
     """
     try:
-        # 获取审计节点
-        audit_node = server_instance.get_objects_node().get_child("2:AuditTrail")
-        
-        # 更新审计信息
-        audit_node.get_child("2:LastModifier").set_value(modifier_name)
-        audit_node.get_child("2:LastModifiedTime").set_value(datetime.now().isoformat())
-        audit_node.get_child("2:LastModifiedNode").set_value(modified_node)
-        audit_node.get_child("2:LastOperation").set_value(operation)
-        audit_node.get_child("2:SessionID").set_value(session_id)
-        
-        print(f"[AUDIT] Updated: modifier={modifier_name}, node={modified_node}, operation={operation}")
+        # 获取修改者节点
+        modifier_node = server_instance.get_objects_node().get_child("2:ModifierTrail")
+
+        # 更新修改者信息
+        modifier_node.get_child("2:LastModifier").set_value(modifier_name)
+        modifier_node.get_child("2:LastModifiedTime").set_value(datetime.now().isoformat())
+        modifier_node.get_child("2:LastModifiedNode").set_value(modified_node)
+        modifier_node.get_child("2:LastOperation").set_value(operation)
+        modifier_node.get_child("2:SessionID").set_value(session_id)
+
+        print(f"[MODIFIER] Updated: modifier={modifier_name}, node={modified_node}, operation={operation}")
         return True
         
     except Exception as e:
-        print(f"[ERROR] Failed to update audit info: {e}")
+        print(f"[ERROR] Failed to update modifier info: {e}")
         return False
-    
-def read_audit_info(server_instance):
+
+def read_modifier_info(server_instance):
     """
-    从 OPC UA 服务器读取审计信息
+    从 OPC UA 服务器读取修改者信息
     """
     try:
-        audit_node = server_instance.get_objects_node().get_child("2:AuditTrail")
-        
-        modifier = audit_node.get_child("2:LastModifier").get_value()
-        modified_time = audit_node.get_child("2:LastModifiedTime").get_value()
-        modified_node = audit_node.get_child("2:LastModifiedNode").get_value()
-        operation = audit_node.get_child("2:LastOperation").get_value()
-        session_id = audit_node.get_child("2:SessionID").get_value()
-        
+        modifier_node = server_instance.get_objects_node().get_child("2:ModifierTrail")
+
+        modifier = modifier_node.get_child("2:LastModifier").get_value()
+        modified_time = modifier_node.get_child("2:LastModifiedTime").get_value()
+        modified_node = modifier_node.get_child("2:LastModifiedNode").get_value()
+        operation = modifier_node.get_child("2:LastOperation").get_value()
+        session_id = modifier_node.get_child("2:SessionID").get_value()
+
         return {
             'modifier': modifier,
             'modified_time': modified_time,
@@ -229,7 +258,7 @@ def read_audit_info(server_instance):
         }
         
     except Exception as e:
-        print(f"[ERROR] Could not read audit info: {e}")
+        print(f"[ERROR] Could not read modifier info: {e}")
         return None
 
 

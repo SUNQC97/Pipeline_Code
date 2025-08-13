@@ -8,7 +8,7 @@ from nicegui import ui
 import asyncio
 from lib.screens.state import kanal_inputs
 from lib.services.opcua_tool import ConfigChangeHandler
-from lib.services.client import connect_opcua_client, read_audit_info, format_audit_source
+from lib.services.client import connect_opcua_client, read_modifier_info, format_modifier_source
 from lib.utils.save_to_file import save_opcua_data_to_file
 from datetime import datetime
 
@@ -34,17 +34,7 @@ def show_virtuos_server():
     log_area = ui.textarea("Log Output").props('readonly').style('width: 100%; height: 200px')
     listener_status_label = ui.label("Listener : Stopped").style('color: red; font-weight: bold;')
 
-    modifier_input = ui.input(
-        label="Modifier Name",
-        value="User1",
-        placeholder="Enter your name or ID for audit trail"
-    ).style("width: 200px; margin-bottom: 10px")
-
-
     pending_panel = ui.column().style('gap:8px; width:100%')
-
-    def get_current_modifier():
-        return modifier_input.value.strip() or "Unknown_User"
 
     with ui.expansion("Block → Kanal Mapping", icon='link').style("width: 100%; max-width: 800px"):
         kanal_count = 1
@@ -226,8 +216,6 @@ def show_virtuos_server():
                 await append_log("[ERROR] OPC UA Server is not running.")
                 return
 
-            modifier_name = get_current_modifier()
-
             for kanal, input_field in kanal_inputs.items():
                 path = input_field.value.strip()
 
@@ -237,11 +225,11 @@ def show_virtuos_server():
                 axis_params = Virtuos_tool.read_Value_Model_json(vz, path)[1]
                 axis_names, axis_values = Virtuos_tool.extract_axis_param_list(axis_params)
                 server.update_kanal_axis_config(opc_server_instance, kanal, "AxisConfigJSON", axis_names, axis_values)
-                
-                server.update_audit_info(
-                    opc_server_instance, 
-                    modifier_name, 
-                    "Refresh_TrafoConfigJSON & AxisConfigJSON", 
+
+                server.update_modifier_info(
+                    opc_server_instance,
+                    "Server",
+                    "Refresh_TrafoConfigJSON & AxisConfigJSON",
                     "Refresh_byVirtuos"
                 )
                 await append_log(f"[OK] {kanal} refreshed from block {path}")
@@ -296,7 +284,6 @@ def show_virtuos_server():
 
 
         try:
-            modifier_name = get_current_modifier()
 
             for kanal, input_field in kanal_inputs.items():
                 block_path = input_field.value.strip()
@@ -315,11 +302,11 @@ def show_virtuos_server():
             opc_server_instance = server.start_opc_server_multi_kanal(kanal_data_dict)
             if opc_server_instance:
                 await append_log("[OK] Multi-Kanal OPC UA Server started.")
-                                # 初始化审计信息
-                server.update_audit_info(
-                    opc_server_instance, 
-                    modifier_name, 
-                    "Server_Initialization_Virtuos", 
+                # 初始化修改者信息
+                server.update_modifier_info(
+                    opc_server_instance,
+                    "Server",
+                    "Server_Initialization_Virtuos",
                     "Start_OPC_Server_Virtuos"
                 )
             else:
@@ -334,14 +321,12 @@ def show_virtuos_server():
         global opc_server_instance
         try:
             if opc_server_instance:
-                
-                modifier_name = get_current_modifier()
-                
-                # 记录停止操作的审计信息
-                server.update_audit_info(
-                    opc_server_instance, 
-                    modifier_name, 
-                    "Server_Termination", 
+
+                # 记录停止操作的修改者信息
+                server.update_modifier_info(
+                    opc_server_instance,
+                    "Server",
+                    "Server_Termination",
                     "Stop_OPC_Server"
                 )
                 
@@ -357,20 +342,16 @@ def show_virtuos_server():
     
     PENDING_CHANGES = {}
 
-
-
     async def confirming_on_change():
-        print("[debug] Confirming changes...")
-
         global skip_write_back_in_virtuos
         if skip_write_back_in_virtuos == "skip_once":
             skip_write_back_in_virtuos = None
             await append_log("[INFO] Skipping write back to Virtuos due to previous operation.")
             return
 
-        # read audit info
-        audit_info = read_audit_info(opc_client)
-        
+        # read modifier info
+        modifier_info = read_modifier_info(opc_client)
+
         dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
         load_dotenv(dotenv_path)
         opc_host = os.getenv("SERVER_IP")
@@ -378,13 +359,13 @@ def show_virtuos_server():
 
         #source = f"OPC UA {opc_host}:{opc_port}"
         base_source = f"OPC UA {opc_host}:{opc_port}"
-        source = format_audit_source(base_source, audit_info)
+        source = format_modifier_source(base_source, modifier_info)
 
         # add log
-        if audit_info and audit_info.get('modifier') and audit_info.get('modifier') != 'Unknown':
-            await append_log(f"[AUDIT] Found modifier: {audit_info.get('modifier')}")
+        if modifier_info and modifier_info.get('modifier') and modifier_info.get('modifier') != 'Unknown':
+            await append_log(f"[MODIFIER] Found modifier: {modifier_info.get('modifier')}")
         else:
-            await append_log("[AUDIT] No audit info or unknown modifier")
+            await append_log("[MODIFIER] No modifier info or unknown modifier")
 
         ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         change_id = f'change:{ts}'
@@ -407,7 +388,7 @@ def show_virtuos_server():
                 ui.label(f'Time: {ts}').style('font-weight:bold; flex-shrink:0')
                 
                 # 审计信息 - 占用剩余空间
-                if audit_info and audit_info.get('modifier') and audit_info.get('modifier') != 'Unknown':
+                if modifier_info and modifier_info.get('modifier') and modifier_info.get('modifier') != 'Unknown':
                     ui.label(f'Source: {source}').style('color: blue; font-weight: bold; flex-grow:1')
                 else:
                     ui.label(f'Source: {source}').style('color: gray; flex-grow:1')
@@ -415,16 +396,16 @@ def show_virtuos_server():
                 # 按钮组 - 放在同一行
                 with ui.row().style('gap: 8px; flex-shrink:0'):
                     async def do_import():
-                        modifier_info = f" by {audit_info.get('modifier', 'Unknown')}" if audit_info else ""
-                        await append_log(f'[CONFIRM] Import {change_id}{modifier_info}...')
+                        info_str = f" by {modifier_info.get('modifier', 'Unknown')}" if modifier_info else ""
+                        await append_log(f'[CONFIRM] Import {change_id}{info_str}...')
                         await write_back_all_from_opcua_server()
                         await append_log(f'[OK] Applied {change_id}')
                         PENDING_CHANGES.pop(change_id, None)
                         row.delete()
 
                     def do_ignore():
-                        modifier_info = f" by {audit_info.get('modifier', 'Unknown')}" if audit_info else ""
-                        append_log(f'[INFO] Ignore {change_id}{modifier_info}')
+                        info_str = f" by {modifier_info.get('modifier', 'Unknown')}" if modifier_info else ""
+                        append_log(f'[INFO] Ignore {change_id}{info_str}')
                         PENDING_CHANGES.pop(change_id, None)
                         row.delete()
 
@@ -488,26 +469,6 @@ def show_virtuos_server():
         kanal_data_dict = server.read_all_kanal_data_from_server_instance(opc_server_instance)
         save_opcua_data_to_file(kanal_data_dict)
 
-    # 添加手动更新审计信息的功能
-    async def manual_update_audit():
-        if not opc_server_instance:
-            await append_log("[ERROR] OPC UA Server is not running.")
-            return
-            
-        modifier_name = get_current_modifier()
-        server.update_audit_info(
-            opc_server_instance, 
-            modifier_name, 
-            "Manual_Update", 
-            "Manual_Audit_Update"
-        )
-        await append_log(f"[OK] Audit info manually updated by {modifier_name}")
-    
-    # 审计信息输入和状态显示
-    with ui.row().style("margin-bottom: 10px; gap: 12px; align-items: end"):
-        modifier_input
-        ui.button("Update Audit Info", on_click=manual_update_audit, color='orange').style("height: 56px")
-        listener_status_label
 
     ui.label("Virtuos → OPC UA Bridge").style("font-weight: bold; font-size: 20px;")
     with ui.row().style("margin-bottom: 10px"):
@@ -523,5 +484,4 @@ def show_virtuos_server():
     kanal_paths_container
     log_area
     ui.separator()
-    ui.label("Pending Changes from External Sources").style("font-weight: bold; font-size: 16px; margin-top: 16px")
     pending_panel

@@ -4,9 +4,21 @@ from opcua import Client
 from lib.utils.save_to_file import save_structure_to_file
 
 
-def connect_opcua_client() -> Client:
+def connect_opcua_client(username=None, password=None) -> Client:
     OPCUA_URL = f"opc.tcp://{os.getenv('SERVER_IP')}:{os.getenv('SERVER_PORT')}"
     client = Client(OPCUA_URL)
+
+    cert_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", "opcua_certs"))
+    client.set_security_string(
+        f"Basic256Sha256,SignAndEncrypt,"
+        f"{os.path.join(cert_dir, 'client_cert.der')},"
+        f"{os.path.join(cert_dir, 'client_key.pem')},"
+        f"{os.path.join(cert_dir, 'server_cert.der')}"
+    )  
+    if username:
+        client.set_user(username)
+    if password:
+        client.set_password(password)
     client.connect()
     print(f"Connected to OPC UA Server at {OPCUA_URL}")
     return client
@@ -130,24 +142,25 @@ def build_kanal_axis_structure(client: Client) -> dict:
 
     return kanal_axis_structure
 
-def read_audit_info(client: Client) -> dict:
+def read_modifier_info(client: Client) -> dict:
     """
-    从 OPC UA 服务器读取审计信息
+    从 OPC UA 服务器读取修改者信息
     """
     try:
         if not client:
             return None
-            
-        # 读取审计节点信息
+        # 自动获取命名空间索引
+        ns_uri = "http://example.org/"
+        idx = client.get_namespace_index(ns_uri)
         root = client.get_root_node()
-        audit_node = root.get_child(["0:Objects", "2:AuditTrail"])
-        
-        modifier = audit_node.get_child("2:LastModifier").get_value()
-        modified_time = audit_node.get_child("2:LastModifiedTime").get_value()
-        modified_node = audit_node.get_child("2:LastModifiedNode").get_value()
-        operation = audit_node.get_child("2:LastOperation").get_value()
-        session_id = audit_node.get_child("2:SessionID").get_value()
-        
+        modifier_node = root.get_child([f"0:Objects", f"{idx}:ModifierTrail"])
+
+        modifier = modifier_node.get_child(f"{idx}:LastModifier").get_value()
+        modified_time = modifier_node.get_child(f"{idx}:LastModifiedTime").get_value()
+        modified_node = modifier_node.get_child(f"{idx}:LastModifiedNode").get_value()
+        operation = modifier_node.get_child(f"{idx}:LastOperation").get_value()
+        session_id = modifier_node.get_child(f"{idx}:SessionID").get_value()
+
         return {
             'modifier': modifier,
             'modified_time': modified_time,
@@ -155,35 +168,34 @@ def read_audit_info(client: Client) -> dict:
             'operation': operation,
             'session_id': session_id
         }
-        
     except Exception as e:
-        print(f"[DEBUG] Could not read audit info: {e}")
+        print(f"[ERROR] Could not read modifier info: {e}")
         return None
 
-def check_audit_node_exists(client: Client) -> bool:
+def check_modifier_node_exists(client: Client) -> bool:
     """
-    检查审计节点是否存在
+    检查修改者节点是否存在
     """
     try:
         root = client.get_root_node()
-        audit_node = root.get_child(["0:Objects", "2:AuditTrail"])
+        modifier_node = root.get_child(["0:Objects", "2:ModifierTrail"])
         return True
     except Exception as e:
-        print(f"[INFO] Audit trail node not found: {e}")
+        print(f"[INFO] Modifier trail node not found: {e}")
         return False
 
-def format_audit_source(base_source: str, audit_info: dict) -> str:
+def format_modifier_source(base_source: str, modifier_info: dict) -> str:
     """
-    格式化审计信息为可显示的 source 字符串
+    格式化修改者信息为可显示的 source 字符串
     """
-    if not audit_info or not audit_info.get('modifier') or audit_info.get('modifier') == 'Unknown':
+    if not modifier_info or not modifier_info.get('modifier') or modifier_info.get('modifier') == 'Unknown':
         return f"{base_source} | Modifier: Unknown"
-    
-    modifier = audit_info.get('modifier', 'Unknown')
-    modified_time = audit_info.get('modified_time', '')
-    operation = audit_info.get('operation', '')
-    modified_node = audit_info.get('modified_node', '')
-    
+
+    modifier = modifier_info.get('modifier', 'Unknown')
+    modified_time = modifier_info.get('modified_time', '')
+    operation = modifier_info.get('operation', '')
+    modified_node = modifier_info.get('modified_node', '')
+
     source = f"{base_source} | Modified by: {modifier}"
     
     # 格式化时间显示
@@ -207,31 +219,31 @@ def format_audit_source(base_source: str, audit_info: dict) -> str:
     
     return source
 
-def get_audit_subscription_nodes(client: Client) -> list:
+def get_modifier_subscription_nodes(client: Client) -> list:
     """
     获取需要订阅的审计节点列表
     """
-    audit_nodes = []
+    modifier_nodes = []
     try:
         root = client.get_root_node()
-        audit_node = root.get_child(["0:Objects", "2:AuditTrail"])
-        
-        # 订阅修改者信息变更
-        modifier_node = audit_node.get_child("2:LastModifier")
-        audit_nodes.append(("AuditTrail/LastModifier", modifier_node))
-        
-        # 也可以订阅其他审计信息
-        # time_node = audit_node.get_child("2:LastModifiedTime")
-        # audit_nodes.append(("AuditTrail/LastModifiedTime", time_node))
-        
-    except Exception as e:
-        print(f"[WARN] Could not get audit subscription nodes: {e}")
-    
-    return audit_nodes
+        modifier_node = root.get_child(["0:Objects", "2:ModifierTrail"])
 
-def update_audit_info_via_client(client: Client, modifier_name: str, modified_node: str = "", operation: str = "Parameter_Update", session_id: str = "") -> bool:
+        # 订阅修改者信息变更
+        modifier_node = modifier_node.get_child("2:LastModifier")
+        modifier_nodes.append(("ModifierTrail/LastModifier", modifier_node))
+
+        # 也可以订阅其他修改者信息
+        # time_node = modifier_node.get_child("2:LastModifiedTime")
+        # modifier_nodes.append(("ModifierTrail/LastModifiedTime", time_node))
+
+    except Exception as e:
+        print(f"[WARN] Could not get modifier subscription nodes: {e}")
+
+    return modifier_nodes
+
+def update_modifier_info_via_client(client: Client, modifier_name: str, modified_node: str = "", operation: str = "Parameter_Update", session_id: str = "") -> bool:
     """
-    通过 OPC UA 客户端更新审计信息
+    通过 OPC UA 客户端更新修改者信息
     """
     try:
         if not client:
@@ -240,20 +252,20 @@ def update_audit_info_via_client(client: Client, modifier_name: str, modified_no
             
         from datetime import datetime
         
-        # 获取审计节点
+        # 获取修改者节点
         root = client.get_root_node()
-        audit_node = root.get_child(["0:Objects", "2:AuditTrail"])
-        
-        # 更新审计信息
-        audit_node.get_child("2:LastModifier").set_value(modifier_name)
-        audit_node.get_child("2:LastModifiedTime").set_value(datetime.now().isoformat())
-        audit_node.get_child("2:LastModifiedNode").set_value(modified_node)
-        audit_node.get_child("2:LastOperation").set_value(operation)
-        audit_node.get_child("2:SessionID").set_value(session_id or f"Client_{datetime.now().strftime('%H%M%S')}")
-        
-        print(f"[AUDIT] Updated via client: modifier={modifier_name}, node={modified_node}, operation={operation}")
+        modifier_node = root.get_child(["0:Objects", "2:ModifierTrail"])
+
+        # 更新修改者信息
+        modifier_node.get_child("2:LastModifier").set_value(modifier_name)
+        modifier_node.get_child("2:LastModifiedTime").set_value(datetime.now().isoformat())
+        modifier_node.get_child("2:LastModifiedNode").set_value(modified_node)
+        modifier_node.get_child("2:LastOperation").set_value(operation)
+        modifier_node.get_child("2:SessionID").set_value(session_id or f"Client_{datetime.now().strftime('%H%M%S')}")
+
+        print(f"[MODIFIER] Updated via client: modifier={modifier_name}, node={modified_node}, operation={operation}")
         return True
         
     except Exception as e:
-        print(f"[ERROR] Failed to update audit info via client: {e}")
+        print(f"[ERROR] Failed to update modifier info via client: {e}")
         return False
