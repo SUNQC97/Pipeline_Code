@@ -368,3 +368,37 @@ def change_xml_from_new_axis(xml_data: str, axis_name: str, kanal_name: str) -> 
     xml_string = xml_string.replace("&lt;![CDATA[", "<![CDATA[").replace("]]&gt;", "]]>")
 
     return xml_string
+
+def change_xml_adapter(xml_data:str, device: dict) -> str:
+    """
+    Change the XML data for a specific adapter device.
+    device: {
+        "Name": "Ethernet 5",
+        "MAC": "00:01:05:94:25:45",
+        "GUID": "{70D021F2-0369-4A3A-A9DE-78608AD033E3}"
+    }
+    """
+    root = ET.fromstring(xml_data)
+
+    # locate AddressInfo -> Pnp
+    pnp = root.find(".//AddressInfo/Pnp")
+    if pnp is None:
+        raise ValueError("XML cannot find AddressInfo/Pnp")
+
+    # DeviceDesc
+    desc = pnp.find("DeviceDesc")
+    if desc is not None:
+        desc.text = device["Name"]
+
+    # DeviceName -> 带 GUID
+    devname = pnp.find("DeviceName")
+    if devname is not None:
+        devname.text = f"\\DEVICE\\{device['GUID'].strip('{}')}"
+
+    # DeviceData -> MAC remove colons
+    devdata = pnp.find("DeviceData")
+    if devdata is not None and device.get("MAC"):
+        devdata.text = device["MAC"].replace(":", "").replace("-", "")
+
+    return ET.tostring(root, encoding='unicode')
+

@@ -24,7 +24,7 @@ import getpass
 from datetime import datetime
 import socket
 import getpass
-
+from lib.utils.get_adapter_info import get_all_adapters
 
 skip_write_back_in_TwinCAT = None
 

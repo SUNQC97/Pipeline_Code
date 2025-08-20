@@ -15,7 +15,8 @@ from lib.utils.xml_read_write import (
     clean_and_insert_trafo_lines,
     read_axis_param_from_xml_with_matching,
     change_xml_from_new_kanal,
-    change_xml_from_new_axis
+    change_xml_from_new_axis,
+    change_xml_adapter
 )
 from lib.services.client import convert_trafo_lines, convert_axis_lines, fetch_axis_json, fetch_trafo_json, read_all_kanal_configs
 from lib.utils.save_to_file import save_xml_to_file
@@ -604,7 +605,27 @@ def write_xml_to_new_axis(sysman, node_path: str, new_axis_name: str, axis_name:
 
     except Exception as e:
         print(f"Error reading XML data: {e}")
+
+def change_adapter_xml(sysman, node_path: str, adapter_info: dict) -> bool:
+    if not sysman:
+        print("TwinCAT sysman is not initialized.")
+        return False
     
-     
-    
-    
+    try:
+        node = sysman.LookupTreeItem(node_path)
+        if not node:
+            print(f"Node not found: {node_path}")
+            return False
+            
+        xml_data = node.ProduceXml(True)
+        
+        # update adapter xml param
+        modified_xml = change_xml_adapter(xml_data, adapter_info)
+        update_node_with_xml(node, modified_xml)
+
+        print("Adapter XML updated successfully.")
+        return True
+
+    except Exception as e:
+        print(f"Error changing adapter XML: {e}")
+        return False

@@ -37,6 +37,7 @@ from lib.services.client import (
     fetch_kanal_inputs_from_opcua
 )
 from lib.services.opcua_tool import ConfigChangeHandler
+from lib.services.twincat_manager import TwinCATManager
 
 
 available_paths = []
@@ -760,3 +761,74 @@ def show_twincat_page():
     #ui.button("One-click Read", on_click=one_click_full_read, color='primary').props('raised')
     #ui.button("Start OPC UA Listener", on_click=start_opcua_client_listener, color='purple')
     #ui.button("Stop OPC UA Listener", on_click=stop_opcua_client_listener, color='purple')
+
+    # IO and Adapter Change - Advanced Version
+    manager = TwinCATManager()
+    
+    def browse_io_structure():
+        nonlocal io_path_dropdown
+        if not state.sysman:
+            append_log("Please initialize the project first.")
+            return
+
+        try:
+            append_log("Browsing I/O Device structure...")
+            available_paths_IO = manager.browse_IO_structure()
+            
+            if not available_paths_IO:
+                append_log("No I/O paths found.")
+                return
+            
+            filtered_paths ={}
+            tiid_prefix = "TIID^"
+
+            for path, value in available_paths_IO.items():
+                # 只保留以 TIID^ 开头且只包含一个 ^ 符号的路径
+                if path.startswith(tiid_prefix) and path.count("^") == 1:
+                    filtered_paths[path] = value
+                
+            if not filtered_paths:
+                append_log("No TIID^xxxx paths found with 2-level structure.")
+                return
+
+            append_log(f"Found {len(available_paths_IO)} I/O nodes.")
+
+            # 清空并重新创建路径选择区域
+            io_path_selection_area.clear()
+            with io_path_selection_area:
+                io_path_dropdown = ui.select(
+                    label="Select I/O Path", 
+                    options=list(filtered_paths.keys())
+                ).style("width: 100%")
+
+                def confirm_io_node_path():
+                    selected_path = io_path_dropdown.value
+                    if selected_path:
+                        cnc_path.value = selected_path  # 或者设置到其他需要的输入框
+                        append_log(f"Selected I/O path set to: {selected_path}")
+                        update_export_import_path()
+
+                def confirm_io_parent_path():
+                    selected_path = io_path_dropdown.value
+                    if selected_path:
+                        parent_path.value = selected_path
+                        append_log(f"[I/O Parent Path] set to: {selected_path}")
+
+                ui.button("Confirm Selected I/O Path", on_click=confirm_io_node_path, color='primary')
+                ui.button("Confirm Selected I/O Parent Path", on_click=confirm_io_parent_path, color='primary')
+
+        except Exception as e:
+            append_log(f"[Error]: {e}")
+
+    # 添加到展开面板中，与其他结构浏览保持一致
+    with ui.expansion("Browse I/O Device Structure", icon='memory'):
+        ui.label("Select I/O structure to browse").style("font-weight: bold; margin-bottom: 10px")
+        
+        browse_io_button = ui.button(
+            "Browse I/O Structure", 
+            on_click=browse_io_structure, 
+            color='secondary'
+        )
+        
+        io_path_selection_area = ui.column()
+        io_path_dropdown = None

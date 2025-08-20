@@ -5,6 +5,7 @@ from lib.screens.nicegui_virtuos_opcua import show_virtuos_server
 from lib.screens.nicegui_twincat_manual import show_twincat_page
 from lib.screens.nicegui_twincat_auto import show_twincat_auto_page
 from lib.screens.nicegui_twincat_create_auto import show_twincat_create_auto_page
+from lib.screens.nicegui_twincat_adapter import twinCAT_adapter_operations
 
 
 with ui.tabs().classes('w-full') as tabs:
@@ -14,6 +15,7 @@ with ui.tabs().classes('w-full') as tabs:
     #twincat_tab_test = ui.tab('TwinCAT Manual Test Page')
     twincat_tab_auto = ui.tab('TwinCAT Auto Page')
     twincat_tab_create_auto = ui.tab('TwinCAT Create Auto Page')
+    twincat_tab_adapter = ui.tab('TwinCAT Adapter Page')
 
 with ui.tab_panels(tabs, value=virtuos_tab).classes('w-full'):
     #with ui.tab_panel(twincat_tab_test):
@@ -30,5 +32,8 @@ with ui.tab_panels(tabs, value=virtuos_tab).classes('w-full'):
     
     with ui.tab_panel(twincat_tab_create_auto):
         show_twincat_create_auto_page()
+
+    with ui.tab_panel(twincat_tab_adapter):
+        twinCAT_adapter_operations()
 
 ui.run(native=True)

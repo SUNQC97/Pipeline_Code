@@ -11,7 +11,7 @@ from lib.services.TwinCAT_interface import (
     add_child_node, write_trafo_lines_to_twincat, write_axis_param_to_twincat,
     write_all_trafo_to_twincat, write_all_axis_param_to_twincat,
     read_all_trafo_from_twincat, read_all_axis_from_twincat, parse_axis_xml,
-    parse_kanal_xml, write_xml_to_new_kanal, write_xml_to_new_axis
+    parse_kanal_xml, write_xml_to_new_kanal, write_xml_to_new_axis, change_adapter_xml
 )
 from lib.services.client import (
     fetch_axis_json, convert_trafo_lines, write_all_configs_to_opcua,
@@ -595,3 +595,43 @@ class TwinCATManager:
         self.log(f"[Info] Detected Kanal parent path: {kanal_parent_path}")
         self.log(f"[Info] Detected Axis parent path: {axis_parent_path}")
         return kanal_parent_path, axis_parent_path
+
+    def browse_IO_structure(self, structure_key = "TIID"):
+        """
+        Browse the I/O structure of the TwinCAT project.
+        """
+        if not self.sysman:
+            raise RuntimeError("Project not initialized")
+
+        root_node = self.sysman.LookupTreeItem(structure_key)
+        all_paths = collect_paths(root_node, prefix=structure_key)
+        filtered_paths = {}
+
+        for path in all_paths:
+            # only keep paths that start with TIID^ and have exactly one ^ symbol
+            if path.startswith("TIID^") and path.count("^") == 1:
+                filtered_paths[path] = path
+
+        self.available_paths = filtered_paths
+
+        return self.available_paths
+
+    def io_adapter_change(self, io_path: str, adapter_info: dict):
+        if not self.sysman:
+            self.log("Please initialize the TwinCAT project first.")
+            return False
+
+        if not io_path:
+            self.log("Please provide a valid I/O path.")
+            return False
+        
+        try:
+            change_adapter_xml(self.sysman, io_path, adapter_info)
+            self.log("I/O adapter changed successfully.")
+            return True
+        except Exception as e:
+            self.log(f"Error changing I/O adapter: {e}")
+            return False
+        
+
+
