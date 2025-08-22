@@ -393,7 +393,7 @@ def change_xml_adapter(xml_data:str, device: dict) -> str:
     # DeviceName -> 带 GUID
     devname = pnp.find("DeviceName")
     if devname is not None:
-        devname.text = f"\\DEVICE\\{device['GUID'].strip('{}')}"
+        devname.text = f"\\DEVICE\\" + "{"+f"{device['GUID'].strip('{}')}"+"}"
 
     # DeviceData -> MAC remove colons
     devdata = pnp.find("DeviceData")
