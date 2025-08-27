@@ -1,4 +1,4 @@
-<TreeItem><ItemName>Achse_22</ItemName><PathName>TICC^CNC^Axes^Achse_22</PathName><ItemType>403</ItemType><ItemId>10</ItemId><ObjectId>#x055100a0</ObjectId><ItemSubType>4</ItemSubType><ChildCount>0</ChildCount><Disabled>false</Disabled><CreateSymbols>false</CreateSymbols><TreeImageId>171</TreeImageId><IsgAxisDef><DriveType>4</DriveType><Spindle>false</Spindle><DefaultChannel>2</DefaultChannel><DefaultIndex>1</DefaultIndex><DefaultProgName>Y2</DefaultProgName><FeedAxis>false</FeedAxis><Inputs /><Outputs /><AchsMds><![CDATA[# ****************************************
+<TreeItem><ItemName>Achse_22</ItemName><PathName>TICC^CNC^Axes^Achse_22</PathName><ItemType>403</ItemType><ItemId>8</ItemId><ObjectId>#x05510080</ObjectId><ItemSubType>4</ItemSubType><ChildCount>0</ChildCount><Disabled>false</Disabled><CreateSymbols>false</CreateSymbols><TreeImageId>171</TreeImageId><IsgAxisDef><DriveType>4</DriveType><Spindle>false</Spindle><DefaultChannel>2</DefaultChannel><DefaultIndex>1</DefaultIndex><DefaultProgName>Y2</DefaultProgName><FeedAxis>false</FeedAxis><Inputs /><Outputs /><AchsMds><![CDATA[# ****************************************
 #
 #TC_AXIS_DESC:    Axis Parameter
 #
@@ -21,12 +21,17 @@ kenngr.achs_mode                                      0x1           ( P-AXIS-000
 kenngr.achs_typ                                       1             ( P-AXIS-00018 : Axis type 1=linear axis, 2=rotatary axis, 4=spindle/single axis
 
 # ----------------------------------------------------                measurement
-kenngr.messachse                                      0             ( P-AXIS-00118 : Axis engaged in measurement travel
 kenngr.hub_messtaster                                 20000         ( P-AXIS-00086 : [0.1um] or [10-4degree] Max. excursion of probe (deceleration distance)
-kenngr.vb_messen                                      20000         ( P-AXIS-00215 : [um/s] or [10-3degree/s] Measurement speed, if not defined with Fxxx
+kenngr.vb_messen                                      20000         ( P-AXIS-00215 : [um/s] or [degree/s] Measurement speed, if not defined with Fxxx
+kenngr.mess_offset                                    100           ( P-AXIS-00114 : [0.1um] or [10-4degree] Measurement travel offset behind the target position
+kenngr.messachse                                      0             ( P-AXIS-00118 : Axis engaged in measurement travel
+kenngr.mess_signal_achs_steuer                        1             ( P-AXIS-00115 : Measurement signal via axis specific control bit mask
+kenngr.mess_signal_taster                             0             ( P-AXIS-00117 : Measurement signal from hardware-interface 
+kenngr.kasto_achse                                    0             ( P-AXIS-00098 : Measurement with edge banding 
+kenngr.mess_signal_sercos                             0             ( P-AXIS-00116 : Measurement with SERCOS-drives 
+kenngr.mess_neg_flanke                                0             ( P-AXIS-00113 : Edge of measurement signal 0=pos 1=neg
 kenngr.echtzeit_bit_nr                                0             ( P-AXIS-00060 : SERCOS-status/control bit for measurement
-kenngr.measure.signal                                 DRIVE_TYPE_DEFAULT ( P-AXIS-00516 : Measurement source of the measuring signal ( DRIVE_TYPE_DEFAULT / PLC / FIXED_STOP / DRIVE / PLC_EXT_LATCH_CONTROL / PLC_FIRST_EVENT )
-kenngr.measure.edge                                   POS           ( P-AXIS-00518 : Edge of the measuring signal ( POS / NEG )
+
 # ----------------------------------------------------                Gantry functionality ( only configured in slave axis)
 kenngr.gantry_ax_nr                                   0             ( P-AXIS-00070 : Axis number of master axis 
 kenngr.gantry_max_diff_resetable                      0             ( P-AXIS-00072 : [0.1um] or [10-4degree] Resetable maximal path distance
@@ -36,7 +41,7 @@ kenngr.gantry_vb_korr                              1000             ( P-AXIS-000
 
 # ----------------------------------------------------                Tracking mode
 kenngr.diff_pos_tracking                              10000         ( P-AXIS-00056 : [0.1um] or [10-4degree] Maximum difference after deactivation  ( limit of tracking)
-kenngr.vb_corr_tracking                               1000          ( P-AXIS-00208 : [um/s] or [10-3degree/s] Velocity of tracking
+kenngr.vb_corr_tracking                               1000          ( P-AXIS-00208 : [um/s] or [degree/s] Velocity of tracking
 kenngr.max_diff_soll_ist                              10000         ( P-AXIS-00108 : [0.1um] or [10-4degree] Max. permissible position difference when enabling drive controller
 
 # ----------------------------------------------------                Collision monitoring
@@ -152,7 +157,7 @@ getriebe[0].lose                                      0             ( P-AXIS-001
 getriebe[0].reverse                                   0             ( P-AXIS-00159 : Reverse of sign for setpoint and actual value 
 getriebe[0].default_lr_hw_nbr                         0             ( P-AXIS-00054 : Number of selected hardware specific parameter set
 getriebe[0].incr_per_rev                              1024          ( P-AXIS-00092 : Position controller increments per revolution (only profibus)
-getriebe[0].vb_not_referenced                         2             ( P-AXIS-00268 : [um/s] or [10-3degree/s] Maximum velocity for unreferenced axes
+getriebe[0].vb_not_referenced                         2             ( P-AXIS-00268 : [um/s] Maximum velocity for unreferenced axes
 
 # ---------------------------------------------------                 Compensations and monitoring
 lr_param.slep_toleranz                                0             ( P-AXIS-00171 : Tolerance range monitoring for following error (commanded value/ current value)
@@ -176,7 +181,7 @@ vorsteuer.vs_a_faktor                                 1             ( P-AXIS-002
 vorsteuer.vs_a_nenner                                 100           ( P-AXIS-00226 : Equivalent time constant for feedforward control of acceleration (denominator)
 vorsteuer.vs_max_sprung                               1             ( P-AXIS-00227 : Max. permis. jump in the down-gradation of feed forward  - not used
 vorsteuer.delay_time                                  1             ( P-AXIS-00055 : [Cycle] Time shift between command actual values
-vorsteuer.vorsteuerung                                0             ( P-AXIS-00223 : Feedforward control mode (bit coded mode) 0x0=disable, 0x1=velocity, ...
+vorsteuer.vorsteuerung                                0             ( P-AXIS-00223 : Feedforward control mode  ( bit coded mode)Bitcodierter Vorsteuermodus 0x0=disable, 0x1=velocity, ...
 vorsteuer.shift_time                                  3             ( P-AXIS-00165 : [Cycles] Time shift command value - feedforward values (balancing runtime of bus, only profibus)
 vorsteuer.default_active                              0             ( P-AXIS-00255 : Permanent activation of feedforward control
 
@@ -211,13 +216,12 @@ antr.simu.ist_gleich_soll                             1             ( P-AXIS-000
 handbetrieb.default.after_g200_g201                   1              ( P-AXIS-00446 : Set default operation mode and control_element after each activation via G200/G201
 handbetrieb.default.operation_mode                    0              ( P-AXIS-00139 : Operation mode ,  1=handwheel, 2=continuous, 3=incremental
 handbetrieb.default.control_element                   0              ( P-AXIS-00046 : Logical identifier of control element 
-#
 handbetrieb.offsetgrenze_pos                          50000000       ( P-AXIS-00138 : [0.1um] or [10-4degree] Positive Offset limit
 handbetrieb.offsetgrenze_neg                          -50000000      ( P-AXIS-00137 : [0.1um] or [10-4degree] Negative Offset limit
 #                                                                    
-handbetrieb.hr.aufl[0]                                10            ( P-AXIS-00025 : [0.1um/Rev] or [10-4degree/Rev] Handwheel resolution 1
-handbetrieb.hr.aufl[1]                                20            ( P-AXIS-00025 : [0.1um/Rev] or [10-4degree/Rev] Handwheel resolution 2
-handbetrieb.hr.aufl[2]                                30            ( P-AXIS-00025 : [0.1um/Rev] or [10-4degree/Rev] Handwheel resolution 3
+handbetrieb.hr.aufl[0]                                10             ( P-AXIS-00025 : [0.1um/Rev] or [10-4degree/Rev] Handwheel resolutions  1
+handbetrieb.hr.aufl[1]                                20             ( P-AXIS-00025 :[0.1um/Rev] or [10-4degree/Rev]Handwheel resolutions  2
+handbetrieb.hr.aufl[2]                                30             ( P-AXIS-00025 :[0.1um/Rev] or [10-4degree/Rev]Handwheel resolutions  3
 handbetrieb.hr.filter_zeit                            10             ( P-AXIS-00069 : [cycles] Filter time constant  (time constante for smoothing)
 #                                                                    
 handbetrieb.tipp.geschw[0]                            30000          ( P-AXIS-00077 : [um/s] or [10-3degree/s] Velocity for the continuous jog mode 1
@@ -242,7 +246,7 @@ handbetrieb.hb.a_max                                  P-AXIS-00008.0 ( P-AXIS-00
 handbetrieb.hb.tr                                     P-AXIS-00196.0 ( P-AXIS-00359 : [s] Ramp time during maximum acceleration
 # ---------------------------------------------------                 Axis filter
 filter[0].order                                       0             ( P-AXIS-00140 : Order of the axis filter , 0=  deactivate filter
-filter[0].prototype                                   1             ( P-AXIS-00153 : Definition of filter characteristics, 1="Critical damping", 2=Butherworth, 3=Bessel, 4=Chebychev, 5=HSC
+filter[0].prototype                                   1             ( P-AXIS-00153 : Definition of filter characteristics , 1="Critical damping", 2=Butherworth, 3=Bessel, 4=Chebychev, 5="HSC
 filter[0].type                                        1             ( P-AXIS-00204 : Filter type, 1=lowpass, 2=highpass, 3=bandpass, 4=bandstop, 5=allpass
 filter[0].fg_f0                                       10            ( P-AXIS-00067 : Filter parameter (characterized frequency)
 filter[0].guete                                       1             ( P-AXIS-00080 : Filter parameter (quality)

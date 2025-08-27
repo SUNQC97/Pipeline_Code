@@ -518,7 +518,7 @@ class TwinCATManager:
             index += 1
 
         # 构造 Achse 名
-        new_axis_name = f"Achse_{kanal_num}{index}"
+        new_axis_name = f"Achse_{kanal_num}_{index}"
         return new_axis_name, index
 
     def create_missing_kanal_axis_structure(self, available_paths: list[str], compare_result: dict):
