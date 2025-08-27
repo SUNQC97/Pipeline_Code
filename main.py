@@ -6,10 +6,11 @@ from lib.screens.nicegui_twincat_manual import show_twincat_page
 from lib.screens.nicegui_twincat_auto import show_twincat_auto_page
 from lib.screens.nicegui_twincat_create_auto import show_twincat_create_auto_page
 from lib.screens.nicegui_twincat_adapter import twinCAT_adapter_operations
-
+from lib.screens.nicegui_virtuos_robot import  show_virtuos_robot
 
 with ui.tabs().classes('w-full') as tabs:
 
+    virtuos_Robot_tab = ui.tab('Virtuos Robot Page')
     virtuos_tab = ui.tab('Virtuos Server Page')    
     twincat_tab_manual = ui.tab('TwinCAT Manual Page')
     #twincat_tab_test = ui.tab('TwinCAT Manual Test Page')
@@ -20,6 +21,8 @@ with ui.tabs().classes('w-full') as tabs:
 with ui.tab_panels(tabs, value=virtuos_tab).classes('w-full'):
     #with ui.tab_panel(twincat_tab_test):
         #show_twincat_manual_page()
+    with ui.tab_panel(virtuos_Robot_tab):
+        show_virtuos_robot()
 
     with ui.tab_panel(virtuos_tab):
         show_virtuos_server()

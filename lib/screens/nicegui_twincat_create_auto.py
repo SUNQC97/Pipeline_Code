@@ -73,8 +73,8 @@ def show_twincat_create_auto_page():
             ui.label("TwinCAT Configuration").style("font-weight: bold; font-size: 16px; margin-bottom: 4px")
             ui.label(f"Project Path: {TWINCAT_PROJECT_PATH}").style("width: 100%")
             ui.label(f"AMS Net ID: {AMS_NET_ID}").style("width: 100%")
-            ui.label(f"Export File Path: {EXPORT_BASE_DIR}\\").style("width: 100%")
-            ui.label(f"Import File Path: {IMPORT_BASE_DIR}\\").style("width: 100%")
+            #ui.label(f"Export File Path: {EXPORT_BASE_DIR}\\").style("width: 100%")
+            #ui.label(f"Import File Path: {IMPORT_BASE_DIR}\\").style("width: 100%")
 
     # TwinCAT related operations
     def init_sysman():

@@ -411,9 +411,9 @@ def show_virtuos_server():
                         PENDING_CHANGES.pop(change_id, None)
                         row.delete()
 
-                    def do_ignore():
+                    async def do_ignore():
                         info_str = f" by {modifier_info.get('modifier', 'Unknown')}" if modifier_info else ""
-                        append_log(f'[INFO] Ignore {change_id}{info_str}')
+                        await append_log(f'[INFO] Ignore {change_id}{info_str}')
                         PENDING_CHANGES.pop(change_id, None)
                         row.delete()
 

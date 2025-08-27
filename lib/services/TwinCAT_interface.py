@@ -585,7 +585,7 @@ def write_xml_to_new_axis(sysman, node_path: str, new_axis_name: str, axis_name:
     """
     Write new Axis XML data to the XML file.
     axis_name: Axis name in the format "Axis_1", "Axis_2", etc.
-    new_axis_name: New Axis name in the format "Axis_11", "Axis_21", etc.
+    new_axis_name: New Axis name in the format "Axis_1_1", "Axis_2_1", etc.
     """
     try:
         node = sysman.LookupTreeItem(node_path)
@@ -598,7 +598,7 @@ def write_xml_to_new_axis(sysman, node_path: str, new_axis_name: str, axis_name:
             print(f"Node {node_path} is not a valid Axis node.")
             return
         
-        modified_xml = change_xml_from_new_axis(xml_data, axis_name, kanal_name)
+        modified_xml = change_xml_from_new_axis(xml_data, new_axis_name, kanal_name)
         update_node_with_xml(node, modified_xml)
 
         save_xml_to_file(modified_xml, new_axis_name)
