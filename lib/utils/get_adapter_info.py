@@ -3,7 +3,7 @@ import subprocess, json
 def get_all_adapters():
     ps = (
         "Get-NetAdapter | "
-        "Select-Object Name, InterfaceGuid, MacAddress | "
+        "Select-Object Name, InterfaceDescription, InterfaceGuid, MacAddress | "
         "ConvertTo-Json -Compress"
     )
 
@@ -24,7 +24,11 @@ def get_all_adapters():
         adapters = [adapters]
 
     return [
-        {"Name": a.get("Name"), "MAC": a.get("MacAddress"), "GUID": a.get("InterfaceGuid")}
+        {
+            "Name": f"{a.get('Name')} ({a.get('InterfaceDescription')})", 
+            "MAC": a.get("MacAddress"), 
+            "GUID": a.get("InterfaceGuid")
+        }
         for a in adapters
     ]
 

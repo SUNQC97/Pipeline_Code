@@ -13,7 +13,6 @@ with ui.tabs().classes('w-full') as tabs:
     virtuos_Robot_tab = ui.tab('Virtuos Robot Page')
     virtuos_tab = ui.tab('Virtuos Server Page')    
     twincat_tab_manual = ui.tab('TwinCAT Manual Page')
-    #twincat_tab_test = ui.tab('TwinCAT Manual Test Page')
     twincat_tab_auto = ui.tab('TwinCAT Auto Page')
     twincat_tab_create_auto = ui.tab('TwinCAT Create Auto Page')
     twincat_tab_adapter = ui.tab('TwinCAT Adapter Page')
