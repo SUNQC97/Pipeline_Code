@@ -1,6 +1,7 @@
 import os
 import xml.etree.ElementTree as ET
 import re
+import math
 from dotenv import load_dotenv
 
 FIELD_MAPPING = {
@@ -9,8 +10,86 @@ FIELD_MAPPING = {
     "s_min": ("kenngr.swe_neg", lambda v: str(int(float(v) * 10000)), lambda v: str(float(v) / 10000)),
     "s_max": ("kenngr.swe_pos", lambda v: str(int(float(v) * 10000)), lambda v: str(float(v) / 10000)),
     "s_init": ("antr.abs_pos_offset", lambda v: str(int(float(v) * 10000)), lambda v: str(float(v) / 10000)),
+    "ratio": ("kenngr.achs_typ", lambda v: handle_ratio_transform(v), lambda v: handle_ratio_reverse_transform(v)),
 }
 
+
+def _safe_eval_ratio(expr: str) -> float:
+    """
+    Safe evaluator for parsing ratio input only.
+    Supports: numbers, decimals, whitespace, multiplication/division, 'pi'/'π'. 
+    Does not support addition/subtraction and other identifiers.
+    """
+    if expr is None:
+        raise ValueError("ratio is None")
+
+    s = expr.strip().lower().replace("π", "pi")
+    # Only allowed characters: digits, dots, whitespace, p, i, *, /
+    if not re.fullmatch(r"[0-9.\s*/pi]+", s):
+        raise ValueError(f"Invalid characters in ratio: {expr}")
+
+    # Disallow consecutive illegal symbols (like '*/', '/*', '**', '//')
+    if re.search(r"(\*\*|//|\*/|/\*)", s):
+        raise ValueError(f"Unsupported operator pattern in ratio: {expr}")
+
+    # Restrict 'pi' appearance: independent identifier or participating in multiplication/division
+    # Allowed simple forms like: pi/180, 2*pi/180, pi/90, 0.5*pi/180, 0.01745
+    allowed = set("0123456789. */pi")
+    if any(ch not in allowed for ch in s):
+        raise ValueError(f"Invalid token in ratio: {expr}")
+
+    # Restricted environment for eval
+    return float(eval(s, {"__builtins__": {}}, {"pi": math.pi}))
+
+def _looks_like_k_times_pi_over_180(x: float, abs_tol: float = 1e-9) -> bool:
+    """
+    Determine if x is in the form k * (π/180), where k is a positive small integer (1..360, range adjustable as needed).
+    This covers cases like pi/180, pi/90 (= 2*pi/180), pi/60 (= 3*pi/180), etc.
+    """
+    if x <= 0:
+        return False
+    base = math.pi / 180.0
+    k = x / base
+    k_round = round(k)
+    if 1 <= k_round <= 360 and abs(k - k_round) <= abs_tol:
+        return True
+    return False
+
+def handle_ratio_transform(raw_value: str) -> str:
+    """
+    Transform for writing to TwinCAT:
+    - If contains 'pi'/'π', directly determine as angular type -> return '2'
+    - Otherwise try to parse as numerical value; if value ≈ k*(π/180), also determine as angular type -> '2'
+    - Other cases return '1' (linear/default)
+    """
+    if raw_value is None:
+        return "1"
+
+    s = raw_value.strip().lower()
+    # 1) Text directly contains pi/π
+    if "pi" in s or "π" in s:
+        return "2"
+
+    # 2) Numerical equivalence determination (e.g. 0.0174532925 ≈ pi/180)
+    try:
+        val = _safe_eval_ratio(s)
+        if _looks_like_k_times_pi_over_180(val, abs_tol=1e-9):
+            return "2"
+    except Exception:
+        # If parsing fails, fall back to default type 1
+        pass
+
+    return "1"
+
+def handle_ratio_reverse_transform(xml_value: str) -> str:
+    """
+    Reverse transform when reading from TwinCAT (XML -> GUI):
+    - If achs_typ == '2', display as 'pi/180' (you can change to 'pi/90' etc. as project default convention)
+    - Otherwise display as '1'
+    Note: achs_typ only has type information, cannot restore original ratio expression, so use a standard placeholder expression.
+    """
+    s = (xml_value or "").strip()
+    return "pi/180" if s == "2" else "1"
 
 def clean_and_insert_trafo_lines(xml_data, new_trafo_lines):
     if not xml_data:
@@ -253,7 +332,7 @@ def change_xml_from_new_kanal(xml_data) -> str:
         for field, filename in default_lis_filenames.items()
     }
 
-    # 3. 解析原始 XML analysieren
+    # Parse original XML data
     if not xml_data:
         raise ValueError("XML data is empty.")
     
@@ -262,7 +341,7 @@ def change_xml_from_new_kanal(xml_data) -> str:
     except ET.ParseError as e:
         raise ValueError(f"Invalid XML data: {e}")
 
-    # 4. 遍历每个字段，插入对应 .lis 内容 durchlaufen 
+    # Iterate through each field and insert corresponding .lis content
     for field, file_path in lis_files.items():
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Missing .lis file for {field}: {file_path}")
@@ -275,7 +354,7 @@ def change_xml_from_new_kanal(xml_data) -> str:
         
         elem.text = f"<![CDATA[{content}]]>"
 
-    # 5. 输出完整 XML 字符串（修复 CDATA 转义）
+    # Output complete XML string (fix CDATA escaping)
     xml_string = ET.tostring(root, encoding="unicode")
     xml_string = xml_string.replace("&lt;![CDATA[", "<![CDATA[").replace("]]&gt;", "]]>")
     
@@ -294,7 +373,7 @@ def change_xml_from_new_axis(xml_data: str, axis_name: str, kanal_name: str) -> 
     Write new Axis XML data to the XML file, including kanal and axis information.
     """
 
-    # 1. load environment variables and .lis file paths
+    # Load environment variables and .lis file paths
     dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
     load_dotenv(dotenv_path)
     lis_base_path = os.getenv("LIS_BASE_PATH")
@@ -304,7 +383,7 @@ def change_xml_from_new_axis(xml_data: str, axis_name: str, kanal_name: str) -> 
     lis_file_name = "achsmds1.lis"
     lis_path = os.path.join(lis_base_path, lis_file_name)
 
-    # 2. check and parse XML
+    # Check and parse XML
     if not xml_data:
         raise ValueError("XML data is empty.")
 
@@ -313,14 +392,14 @@ def change_xml_from_new_axis(xml_data: str, axis_name: str, kanal_name: str) -> 
     except ET.ParseError as e:
         raise ValueError(f"Invalid XML: {e}")
 
-    # 3. read .lis file content
+    # Read .lis file content
     if not os.path.exists(lis_path):
         raise FileNotFoundError(f"{lis_path} not found")
 
     with open(lis_path, "r", encoding="utf-8", errors="ignore") as f:
         content = f.read()
 
-    # 4. extract kanal number from kanal_name and write to <DefaultChannel>
+    # Extract kanal number from kanal_name and write to <DefaultChannel>
     try:
         kanal_num = int(kanal_name.split("_")[-1])
     except (IndexError, ValueError):
@@ -331,7 +410,7 @@ def change_xml_from_new_axis(xml_data: str, axis_name: str, kanal_name: str) -> 
         raise ValueError("Missing <DefaultChannel> element in XML")
     dc_elem.text = str(kanal_num)
 
-    # 5. extract axis number from axis_name and write to <DefaultIndex>
+    # Extract axis number from axis_name and write to <DefaultIndex>
     try:
         axis_index = int(axis_name.split("_")[-1])
     except (IndexError, ValueError):
@@ -342,9 +421,9 @@ def change_xml_from_new_axis(xml_data: str, axis_name: str, kanal_name: str) -> 
     di_elem = root.find(".//DefaultIndex")
     if di_elem is None:
         raise ValueError("Missing <DefaultIndex> element in XML")
-    di_elem.text = str(axis_index-1)    # # Index is zero-based, so we subtract 1
+    di_elem.text = str(axis_index-1)    # Index is zero-based, so we subtract 1
 
-    # 6. generate and wirte DefaultProgName
+    # Generate and write DefaultProgName
     prog_letters = ["X", "Y", "Z", "A", "B", "C"]
     if default_index_zero_based < len(prog_letters):
         progname = f"{prog_letters[default_index_zero_based]}{kanal_num}"
@@ -356,14 +435,14 @@ def change_xml_from_new_axis(xml_data: str, axis_name: str, kanal_name: str) -> 
         raise ValueError("Missing <DefaultProgName> element in XML")
     dp_elem.text = progname
 
-    # 7. inject CDATA content into <AchsMds>
+    # Inject CDATA content into <AchsMds>
     achs_elem = root.find(".//AchsMds")
     if achs_elem is None:
         raise ValueError("Missing <AchsMds> element in XML")
 
     achs_elem.text = f"<![CDATA[{content}]]>"
 
-    # 8. return XML string
+    # Return XML string
     xml_string = ET.tostring(root, encoding="unicode")
     xml_string = xml_string.replace("&lt;![CDATA[", "<![CDATA[").replace("]]&gt;", "]]>")
 
@@ -380,7 +459,7 @@ def change_xml_adapter(xml_data:str, device: dict) -> str:
     """
     root = ET.fromstring(xml_data)
 
-    # locate AddressInfo -> Pnp
+    # Locate AddressInfo -> Pnp
     pnp = root.find(".//AddressInfo/Pnp")
     if pnp is None:
         raise ValueError("XML cannot find AddressInfo/Pnp")
@@ -390,7 +469,7 @@ def change_xml_adapter(xml_data:str, device: dict) -> str:
     if desc is not None:
         desc.text = device["Name"]
 
-    # DeviceName -> 带 GUID
+    # DeviceName -> with GUID
     devname = pnp.find("DeviceName")
     if devname is not None:
         devname.text = f"\\DEVICE\\{device['GUID'].strip('{}')}"

@@ -214,7 +214,9 @@ def show_virtuos_server():
             if skip_write_back_in_virtuos == "skip_once":
                 skip_write_back_in_virtuos = None
                 await append_log("[INFO] Resetting skip flag after 2 seconds.")
-        asyncio.create_task(clear_skip_flag())
+        
+        clear_task = asyncio.create_task(clear_skip_flag())
+
 
         try:
             if not vz:
@@ -246,6 +248,8 @@ def show_virtuos_server():
 
         except Exception as e:
             await append_log(f"[EXCEPTION] {e}")
+            clear_task.cancel()
+            skip_write_back_in_virtuos = None
 
     async def write_back_all_from_opcua_server():
         global vz, opc_server_instance, skip_write_back_in_virtuos
@@ -310,7 +314,7 @@ def show_virtuos_server():
             opc_server_instance = server.start_opc_server_multi_kanal(kanal_data_dict)
             if opc_server_instance:
                 await append_log("[OK] Multi-Kanal OPC UA Server started.")
-                # 初始化修改者信息
+                # initialize modifier info
                 server.update_modifier_info(
                     opc_server_instance,
                     "Server",
@@ -359,6 +363,11 @@ def show_virtuos_server():
 
         # read modifier info
         modifier_info = read_modifier_info(opc_client)
+
+        if modifier_info and modifier_info.get('operation') in ['Refresh_byVirtuos', 'Start_OPC_Server_Virtuos']:
+            await append_log(f"[INFO] Skipping server internal operation: {modifier_info.get('operation')}")
+            return
+
 
         dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
         load_dotenv(dotenv_path)

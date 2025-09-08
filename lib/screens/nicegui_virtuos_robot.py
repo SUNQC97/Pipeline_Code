@@ -5,6 +5,7 @@ from lib.services import remote
 from lib.services import Virtuos_tool
 from nicegui import ui
 import asyncio
+from datetime import date
 
 skip_write_back_in_virtuos = None
 
@@ -134,6 +135,146 @@ def show_virtuos_robot():
 
     block_select.on("update:model-value", lambda e: update_selected_block_info())
 
+    # File Upload Section
+    with ui.expansion("Upload Parameter File", icon="upload").style("width: 100%; max-width: 800px; margin-top: 20px"):
+        ui.label("Upload robot parameter files to automatically fill the parameter fields").classes("text-sm text-gray-600 mb-4")
+        
+        async def handle_upload(e):
+            """Handle uploaded parameter file and auto-fill GUI"""
+            try:
+                content = e.content.read()
+                filename = e.name
+                
+                await append_log(f"[INFO] Processing uploaded file: {filename}")
+                
+                # Parse JSON file
+                if filename.endswith('.json'):
+                    try:
+                        data = json.loads(content.decode('utf-8'))
+                        
+                        # Check for robot parameter structure
+                        if 'trafo_names' in data and 'trafo_values' in data:
+                            # Load trafo parameters
+                            param_data["trafo_names"] = data.get("trafo_names", [])
+                            param_data["trafo_values"] = data.get("trafo_values", [])
+                            await append_log(f"[OK] Loaded {len(param_data['trafo_names'])} trafo parameters")
+                        
+                        if 'axis_names' in data and 'axis_values' in data:
+                            # Load axis parameters  
+                            param_data["axis_names"] = data.get("axis_names", [])
+                            param_data["axis_values"] = data.get("axis_values", [])
+                            await append_log(f"[OK] Loaded {len(param_data['axis_names'])} axis parameters")
+                        
+                        # Alternative structure check - direct parameter mapping
+                        if 'trafo' in data or 'axis' in data:
+                            if 'trafo' in data:
+                                trafo_dict = data['trafo']
+                                param_data["trafo_names"] = list(trafo_dict.keys())
+                                param_data["trafo_values"] = list(trafo_dict.values())
+                                await append_log(f"[OK] Loaded {len(param_data['trafo_names'])} trafo parameters from dict structure")
+                            
+                            if 'axis' in data:
+                                axis_dict = data['axis']
+                                param_data["axis_names"] = list(axis_dict.keys())
+                                param_data["axis_values"] = list(axis_dict.values())
+                                await append_log(f"[OK] Loaded {len(param_data['axis_names'])} axis parameters from dict structure")
+                        
+                        # Update display with loaded parameters
+                        if param_data["trafo_names"] or param_data["axis_names"]:
+                            await update_param_display()
+                            await append_log("[OK] Parameter fields updated successfully!")
+                        else:
+                            await append_log("[WARN] No valid robot parameters found in file")
+                            
+                    except json.JSONDecodeError as e:
+                        await append_log(f"[ERROR] Invalid JSON format in {filename}: {e}")
+                        
+                # Parse text files (simple key=value format)
+                elif filename.endswith(('.txt', '.cfg', '.ini')):
+                    try:
+                        text_content = content.decode('utf-8')
+                        lines = text_content.strip().split('\n')
+                        
+                        trafo_names, trafo_values = [], []
+                        axis_names, axis_values = [], []
+                        
+                        for line in lines:
+                            line = line.strip()
+                            if '=' in line and not line.startswith('#'):
+                                key, value = line.split('=', 1)
+                                key, value = key.strip(), value.strip()
+                                
+                                # Classify parameters
+                                if any(x in key.lower() for x in ['trafo', 'transform', 'kin']):
+                                    trafo_names.append(key)
+                                    trafo_values.append(value)
+                                elif any(x in key.lower() for x in ['axis', 'joint', 'motor']):
+                                    axis_names.append(key)
+                                    axis_values.append(value)
+                        
+                        param_data["trafo_names"] = trafo_names
+                        param_data["trafo_values"] = trafo_values
+                        param_data["axis_names"] = axis_names
+                        param_data["axis_values"] = axis_values
+                        
+                        await append_log(f"[OK] Parsed {len(trafo_names)} trafo and {len(axis_names)} axis parameters from text file")
+                        await update_param_display()
+                        
+                    except UnicodeDecodeError:
+                        await append_log(f"[ERROR] Cannot decode text file {filename}")
+                        
+                else:
+                    await append_log(f"[ERROR] Unsupported file format: {filename}. Please upload .json, .txt, .cfg, or .ini files")
+                    
+            except Exception as e:
+                await append_log(f"[ERROR] Failed to process uploaded file: {e}")
+        
+        ui.upload(
+            label="Choose Parameter File (.json, .txt, .cfg, .ini)", 
+            on_upload=handle_upload,
+            max_file_size=5*1024*1024,  # 5MB limit
+            auto_upload=True
+        ).props('accept=".json,.txt,.cfg,.ini"').classes("w-full mb-4")
+        
+        # Download current parameters
+        async def download_current_params():
+            """Download current parameters as JSON file"""
+            try:
+                if not (param_data["trafo_names"] or param_data["axis_names"]):
+                    await append_log("[WARN] No parameters loaded to download.")
+                    return
+                
+                # Create download data
+                download_data = {
+                    "trafo_names": param_data["trafo_names"],
+                    "trafo_values": param_data["trafo_values"],
+                    "axis_names": param_data["axis_names"],
+                    "axis_values": param_data["axis_values"],
+                    "timestamp": str(date.today()),
+                    "block_path": selected_path_label.text,
+                    "metadata": {
+                        "exported_by": "Virtuos Robot Parameter Tool",
+                        "version": "1.0"
+                    }
+                }
+                
+                # Convert to JSON
+                json_content = json.dumps(download_data, indent=2, ensure_ascii=False)
+                
+                # Trigger download
+                ui.download(
+                    json_content.encode('utf-8'),
+                    filename=f"robot_parameters_{date.today().strftime('%Y%m%d')}.json",
+                    media_type="application/json"
+                )
+                
+                await append_log("[OK] Current parameters downloaded successfully.")
+                
+            except Exception as e:
+                await append_log(f"[ERROR] Failed to download parameters: {e}")
+        
+        ui.button("Download Current Parameters", on_click=download_current_params).props("color=secondary").classes("w-full")
+
     # Create parameter display area
     param_container = ui.column().style("width: 100%; max-width: 800px; margin-top: 20px")
 
@@ -235,7 +376,7 @@ def show_virtuos_robot():
 
         except Exception as e:
             await append_log(f"[ERROR] Failed to write parameters to block '{block_path}': {e}")
-
+    
     ui.button("Read and Display Parameters", on_click=read_all_param_from_block).props("color=primary").style("margin-top: 8px")
     ui.button("Connect to Virtuos (Before Start)", on_click=connect_to_existing_virtuos_before_start).props("color=secondary").style("margin-top: 8px; margin-left: 16px")
     ui.button("Connect to Virtuos (After Start)", on_click=connect_to_existing_virtuos_after_start).props("color=secondary").style("margin-top: 8px; margin-left: 16px")
